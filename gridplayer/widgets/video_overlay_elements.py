@@ -54,6 +54,14 @@ BAR_PROGRESS_COLOR_ON_RED = "#47d147"
 BAR_SELECT_COLOR = "#4775d1"
 BAR_AHEAD_FADE = 0.4
 
+# Loops are marked by full-height lines at their start and end: the one
+# playing, or being made, green and wider, the rest blue, a softer one than
+# pure blue, which glares. Each line is centred on its time.
+LOOP_MARK_COLOR = "#00ff00"
+LOOP_MARK_WIDTH = 3
+OTHER_LOOP_MARK_COLOR = "#1e90ff"
+OTHER_LOOP_MARK_WIDTH = 2
+
 # A chapter is marked the way mpv marks it: a wedge cut into the top and the
 # bottom edge of the bar, which leaves the middle of it to the loop marks'
 # full-height lines.
@@ -1513,21 +1521,22 @@ class OverlayProgressBar(OverlayBar):
         self.draw_segments(painter)
         self.draw_chapter_notches(painter)
 
-        # the loops waiting their turn under the one playing, dimmer
+        # the loops waiting their turn under the one playing
+        other_color = QColor(OTHER_LOOP_MARK_COLOR)
         for start, end in self._other_loops:
             if start > 0:
-                self.draw_loop_mark(painter, self.rect(), start, Qt.darkGreen)
+                self.draw_loop_mark(painter, start, other_color, OTHER_LOOP_MARK_WIDTH)
             if end < 1:
-                self.draw_loop_mark(painter, self.rect(), end, Qt.darkGreen)
+                self.draw_loop_mark(painter, end, other_color, OTHER_LOOP_MARK_WIDTH)
 
-        # and the one playing, bolder when there are others to tell it from
-        width = 2 if self._other_loops else 1
+        # and the one playing
+        color = QColor(LOOP_MARK_COLOR)
 
         if self.loop_start > 0:
-            self.draw_loop_mark(painter, self.rect(), self.loop_start, width=width)
+            self.draw_loop_mark(painter, self.loop_start, color, LOOP_MARK_WIDTH)
 
         if self.loop_end < 100:
-            self.draw_loop_mark(painter, self.rect(), self.loop_end, width=width)
+            self.draw_loop_mark(painter, self.loop_end, color, LOOP_MARK_WIDTH)
 
     def _filled_parts(self, is_hovered):
         """What is played from the left, and under the mouse up to it."""
@@ -1551,14 +1560,12 @@ class OverlayProgressBar(OverlayBar):
             (QRect(played, 0, mouse - played, height), self.color_ahead),
         ]
 
-    def draw_loop_mark(self, painter, rect, loop_mark_percent, color=Qt.green, width=1):
-        cur_start_loop_rect = rect.translated(0, 0)
-        cur_start_loop = math.ceil(rect.width() * loop_mark_percent)
+    def draw_loop_mark(self, painter, fraction, color, width):
+        """A full-height line centred on where a loop starts or ends."""
 
-        cur_start_loop_rect.setX(cur_start_loop)
-        cur_start_loop_rect.setWidth(width)
+        x = math.ceil(self.width() * fraction) - width // 2
 
-        painter.fillRect(cur_start_loop_rect, color)
+        painter.fillRect(QRect(x, 0, width, self.height()), color)
 
     def draw_hovered_chapter(self, painter):
         """Set the chapter under the mouse apart from the rest of the bar."""
