@@ -1107,7 +1107,13 @@ class VideoBlock(QWidget):
     def is_loop_sequence(self) -> bool:
         """Whether the end of the loop playing goes on to another."""
 
-        return not self.video_params.is_loop_open and len(self.video_params.loops) > 1
+        params = self.video_params
+
+        return (
+            not params.is_loop_open
+            and not params.is_outside_loops
+            and len(params.loops) > 1
+        )
 
     @property
     def is_end_a_loop(self) -> bool:
@@ -1262,6 +1268,10 @@ class VideoBlock(QWidget):
             self._loop_wrapped()
             return
 
+        # played as it is outside the loops, until it plays into one
+        if self.video_params.is_outside_loops:
+            self.loop.adopt_at(self.time)
+
         # 100ms headspace for slow callbacks
         if self.time < self.loop_floor - 100:
             self._seek_loop_start()
@@ -1361,6 +1371,7 @@ class VideoBlock(QWidget):
         is_plain_loop = (
             self.video_params.end_action == VideoEndAction.LOOP_FILE
             and not self.is_loop_set
+            and not self.video_params.is_outside_loops
             and not self.video_params.is_start_random
         )
 
@@ -1383,6 +1394,12 @@ class VideoBlock(QWidget):
         # of several made goes on to the next, round to the first again.
         if self.is_loop_set:
             self.loop.step(1)
+            self._loop_to_start()
+            return
+
+        # played outside the loops to the end: back to the one it left
+        if self.video_params.is_outside_loops:
+            self.loop.rejoin()
             self._loop_to_start()
             return
 
@@ -1574,6 +1591,7 @@ class VideoBlock(QWidget):
         self.video_params.loops = list(snapshot.loops)
         self.video_params.loop_index = snapshot.loop_index
         self.video_params.loop_start = snapshot.loop_start
+        self.video_params.is_outside_loops = snapshot.is_outside_loops
         self.loop.announce()
         self.set_rate(snapshot.rate, is_silent=True)
 
@@ -2070,8 +2088,9 @@ class VideoBlock(QWidget):
                 self.loop_end_action()
                 return
 
-            # one of several loops goes on to the next, from its start
-            if self.is_loop_sequence:
+            # one of several loops goes on to the next, from its start, and
+            # outside them the end goes back to the one left
+            if self.is_loop_sequence or self.video_params.is_outside_loops:
                 self.loop_end_action()
                 return
 

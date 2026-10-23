@@ -185,6 +185,10 @@ class Video(BaseModel):
     # Loop End has not finished. Meanwhile it plays from there to the end of
     # the file and round, the loops made before it waiting
     loop_start: int | None = None
+    # played as it is, from where a viewer's seek outside every loop landed,
+    # until it plays into one of them or reaches the end of the file, which
+    # goes back to the one playing
+    is_outside_loops: bool = False
 
     end_action: VideoEndAction = session_field("video_defaults/end_action")
     # whether the next, previous or a random file is looked for in the
@@ -369,7 +373,7 @@ class Video(BaseModel):
         if self.loop_start is not None:
             return self.loop_start, None
 
-        if not self.loops:
+        if not self.loops or self.is_outside_loops:
             return None
 
         return self.loops[self.loop_index]
