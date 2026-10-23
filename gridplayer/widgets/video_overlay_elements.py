@@ -1,7 +1,7 @@
 import math
 from typing import NamedTuple
 
-from PyQt5.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, Qt, pyqtSignal
+from PyQt5.QtCore import QEvent, QPoint, QPointF, QRect, QRectF, QSize, Qt, pyqtSignal
 from PyQt5.QtGui import (
     QBitmap,
     QBrush,
@@ -88,6 +88,11 @@ HOVER_LABEL_MIN_NAME_PX = 30
 # half the width of the pointer under the hover label, and its height
 HOVER_POINTER_HALF_WIDTH = 5
 HOVER_POINTER_HEIGHT = 10
+
+# The picture of the time under the mouse, above it in the hover label: this
+# long on its longer side at most, and this far above the time
+HOVER_PREVIEW_PX = 160
+HOVER_PREVIEW_GAP_PX = 2
 
 # Segments are drawn in a band through the middle of the bar, a third of its
 # height: over the progress, which still reads above and below them, and
@@ -791,6 +796,9 @@ class OverlayShortLabelFloating(OverlayShortLabel):
     # cut to a new shape on the opaque overlay, which cuts its window to it
     shape_changed = pyqtSignal()
 
+    # the picture at the time under the mouse wanted, by the time
+    preview_wanted = pyqtSignal(int)
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -823,6 +831,16 @@ class OverlayShortLabelFloating(OverlayShortLabel):
         # over a bookmark's marker, whose place the pointer takes
         self._is_on_marker = False
 
+        # the picture of the video at the time under the mouse, or of where
+        # it was a moment ago, until that one comes; None for none
+        self.preview: QImage | None = None
+
+        # whether the cell has room above the bar for the picture
+        self._is_preview_room = True
+
+        # where it was last shown, for it to be shown again with a picture
+        self._shown_at = None
+
     def on_mouse_over(self, pos, progress_pos, bar_width):
         """The mouse over the bar: the time there, and what it is in.
 
@@ -837,7 +855,35 @@ class OverlayShortLabelFloating(OverlayShortLabel):
         self._marker = None
         self._bookmark_on = None
 
-        self._show_at(pos, int(self.length * progress_pos), bar_width, ())
+        time_ms = int(self.length * progress_pos)
+
+        self._show_at(pos, time_ms, bar_width, ())
+
+        self.preview_wanted.emit(time_ms)
+
+    def set_preview(self, preview: QImage | None):
+        """The picture at the time under the mouse, shown above it."""
+
+        self.preview = preview
+
+        if self._shown_at is not None and self.isVisible() and not self._is_on_marker:
+            self._show_at(*self._shown_at)
+
+    def _preview_size(self) -> QSize:
+        """How big the picture is shown: within a square of its own, and
+        the cell's width; none over a marker, or where there is no room."""
+
+        if self.preview is None or self._is_on_marker or not self._is_preview_room:
+            return QSize(0, 0)
+
+        most = min(
+            HOVER_PREVIEW_PX, self.parentWidget().width() - OverlayWidget.padding * 2
+        )
+
+        if most <= 0:
+            return QSize(0, 0)
+
+        return self.preview.size().scaled(most, most, Qt.KeepAspectRatio)
 
     def on_marker_over(self, pos, bookmarks, bar_width):
         """The mouse over a bookmark's marker: where it is, and every bookmark
@@ -887,6 +933,9 @@ class OverlayShortLabelFloating(OverlayShortLabel):
         self._show_at(pos, told.time_ms, bar_width, bookmarks)
 
     def _show_at(self, pos, time_ms, bar_width, bookmarks):
+        self._shown_at = (pos, time_ms, bar_width, bookmarks)
+        self._is_preview_room = True
+
         self.text = self._hover_text(time_ms)
 
         rows = BOOKMARK_ROWS_MAX
@@ -900,8 +949,12 @@ class OverlayShortLabelFloating(OverlayShortLabel):
         self.update_visuals()
 
         # a cell too short for the lines below the time above the bar goes
-        # without them: SponsorBlock's first, then the bookmarks' a row at a
-        # time, down to one
+        # without them: the picture first, then SponsorBlock's, then the
+        # bookmarks' a row at a time, down to one
+        if not self._preview_size().isEmpty() and pos.y() < self.height():
+            self._is_preview_room = False
+            self.update_visuals()
+
         if self.segment_line is not None and pos.y() < self.height():
             self.segment_line = None
             self.update_visuals()
@@ -1115,6 +1168,8 @@ class OverlayShortLabelFloating(OverlayShortLabel):
     def on_mouse_left(self):
         self._marker = None
         self._bookmark_on = None
+        self._shown_at = None
+        self.preview = None
 
         self.hide()
 
@@ -1135,6 +1190,26 @@ class OverlayShortLabelFloating(OverlayShortLabel):
             painter.setRenderHint(QPainter.Antialiasing, True)
             painter.fillPath(self.box_path(), self.fill_color)
             painter.restore()
+
+        preview_size = self._preview_size()
+
+        if not preview_size.isEmpty():
+            preview_box = QRect(
+                text_box.left() + (text_box.width() - preview_size.width()) // 2,
+                text_box.top() + OverlayWidget.padding // 2,
+                preview_size.width(),
+                preview_size.height(),
+            )
+
+            painter.save()
+            painter.setRenderHint(QPainter.SmoothPixmapTransform, True)
+            painter.drawImage(preview_box, self.preview)
+            painter.restore()
+
+            # the time and what is under it below the picture
+            text_box = text_box.adjusted(
+                0, preview_size.height() + HOVER_PREVIEW_GAP_PX, 0, 0
+            )
 
         painter.setPen(self.text_color)
 
@@ -1359,6 +1434,12 @@ class OverlayShortLabelFloating(OverlayShortLabel):
         for line in self._under_lines():
             width = max(width, _swatch_width(line) + _line_advance(line, self.font()))
             height += metrics.height()
+
+        preview_size = self._preview_size()
+
+        if not preview_size.isEmpty():
+            width = max(width, preview_size.width())
+            height += preview_size.height() + HOVER_PREVIEW_GAP_PX
 
         self.setFixedSize(width + padding, height + padding + self._pointer_height())
 

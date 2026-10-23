@@ -22,6 +22,7 @@ from gridplayer.player.managers.pan import PanManager
 from gridplayer.player.managers.playlist import PlaylistManager
 from gridplayer.player.managers.recent_list import RecentListManager
 from gridplayer.player.managers.screensaver import ScreensaverManager
+from gridplayer.player.managers.seek_preview import SeekPreviewManager
 from gridplayer.player.managers.settings import SettingsManager
 from gridplayer.player.managers.single_mode import SingleModeManager
 from gridplayer.player.managers.snapshots import SnapshotsManager
@@ -62,6 +63,7 @@ class Player(QWidget, ManagersManager):
             "single_mode": SingleModeManager,
             "log": LogManager,
             "stream_proxy": StreamProxyManager,
+            "seek_preview": SeekPreviewManager,
             "add_videos": AddVideosManager,
             "recent_list": RecentListManager,
             "dialogs": DialogsManager,
@@ -94,6 +96,9 @@ class Player(QWidget, ManagersManager):
                 ("single_mode.mode_changed", "refresh"),
                 ("playlist.playlist_file_loaded", "refresh"),
                 ("playlist.playlist_saved", "refresh"),
+                ("window_state.closing", "cleanup"),
+            ],
+            "seek_preview": [
                 ("window_state.closing", "cleanup"),
             ],
             "active_block": [

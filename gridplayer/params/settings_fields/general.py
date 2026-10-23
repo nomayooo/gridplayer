@@ -81,6 +81,15 @@ GENERAL_FIELDS: tuple[SettingField, ...] = (
         label=translate("SettingsDialog", "Disable screensaver while playing"),
     ),
     CheckboxField(
+        settings_key="player/seek_preview",
+        label=translate("SettingsDialog", "Show a preview when hovering the seek bar"),
+        tooltip=translate(
+            "SettingsDialog",
+            "A picture of the video at the time under the mouse, above it."
+            " For videos played from files on disk.",
+        ),
+    ),
+    CheckboxField(
         settings_key="player/media_keys_background",
         label=translate("SettingsDialog", "Control playback with media keys globally"),
     ),
