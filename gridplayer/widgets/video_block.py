@@ -1939,6 +1939,7 @@ class VideoBlock(QWidget):
 
         self.chapters.update()
         self.sponsorblock.update()
+        self.preview.warm_up()
 
         self.is_audio_present_change.emit(bool(self.audio.tracks))
 

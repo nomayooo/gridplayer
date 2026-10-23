@@ -90,8 +90,11 @@ HOVER_POINTER_HALF_WIDTH = 5
 HOVER_POINTER_HEIGHT = 10
 
 # The picture of the time under the mouse, above it in the hover label: this
-# long on its longer side at most, and this far above the time
-HOVER_PREVIEW_PX = 160
+# long on its longer side at most, and this far above the time. A cell with
+# less room above the bar shows it smaller, down to the least; with less room
+# than that, the time alone.
+HOVER_PREVIEW_PX = 320
+HOVER_PREVIEW_MIN_PX = 80
 HOVER_PREVIEW_GAP_PX = 2
 
 # Segments are drawn in a band through the middle of the bar, a third of its
@@ -835,8 +838,9 @@ class OverlayShortLabelFloating(OverlayShortLabel):
         # it was a moment ago, until that one comes; None for none
         self.preview: QImage | None = None
 
-        # whether the cell has room above the bar for the picture
-        self._is_preview_room = True
+        # how long the picture's longer side may be, for the room the cell
+        # has above the bar
+        self._preview_most = HOVER_PREVIEW_PX
 
         # where it was last shown, for it to be shown again with a picture
         self._shown_at = None
@@ -870,17 +874,19 @@ class OverlayShortLabelFloating(OverlayShortLabel):
             self._show_at(*self._shown_at)
 
     def _preview_size(self) -> QSize:
-        """How big the picture is shown: within a square of its own, and
-        the cell's width; none over a marker, or where there is no room."""
+        """How big the picture is shown: within a square of its own, the
+        cell's width and the room above the bar; none over a marker, or where
+        it would be too small to make out."""
 
-        if self.preview is None or self._is_on_marker or not self._is_preview_room:
+        if self.preview is None or self._is_on_marker:
             return QSize(0, 0)
 
         most = min(
-            HOVER_PREVIEW_PX, self.parentWidget().width() - OverlayWidget.padding * 2
+            self._preview_most,
+            self.parentWidget().width() - OverlayWidget.padding * 2,
         )
 
-        if most <= 0:
+        if most < HOVER_PREVIEW_MIN_PX:
             return QSize(0, 0)
 
         return self.preview.size().scaled(most, most, Qt.KeepAspectRatio)
@@ -934,7 +940,7 @@ class OverlayShortLabelFloating(OverlayShortLabel):
 
     def _show_at(self, pos, time_ms, bar_width, bookmarks):
         self._shown_at = (pos, time_ms, bar_width, bookmarks)
-        self._is_preview_room = True
+        self._preview_most = HOVER_PREVIEW_PX
 
         self.text = self._hover_text(time_ms)
 
@@ -948,11 +954,16 @@ class OverlayShortLabelFloating(OverlayShortLabel):
         # depends on how wide it is
         self.update_visuals()
 
-        # a cell too short for the lines below the time above the bar goes
-        # without them: the picture first, then SponsorBlock's, then the
-        # bookmarks' a row at a time, down to one
-        if not self._preview_size().isEmpty() and pos.y() < self.height():
-            self._is_preview_room = False
+        # a cell too short for all of it above the bar shows the picture
+        # smaller, down to none, then goes without the lines below the time:
+        # SponsorBlock's first, then the bookmarks' a row at a time, down to one
+        preview_size = self._preview_size()
+
+        if not preview_size.isEmpty() and pos.y() < self.height():
+            fit_height = preview_size.height() - (self.height() - pos.y())
+            longer = max(preview_size.width(), preview_size.height())
+
+            self._preview_most = max(0, longer * fit_height // preview_size.height())
             self.update_visuals()
 
         if self.segment_line is not None and pos.y() < self.height():

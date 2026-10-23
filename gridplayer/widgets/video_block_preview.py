@@ -24,11 +24,24 @@ class PreviewControl(VideoBlockPart):
     @only_seekable
     @only_local_file
     @only_with_video_tacks
+    def warm_up(self):
+        """A video to preview loaded: the previewer started now, for the
+        first picture not to wait for it to start."""
+
+        previewer = self._previewer()
+
+        if previewer is not None:
+            previewer.warm_up()
+
+    @only_initialized
+    @only_seekable
+    @only_local_file
+    @only_with_video_tacks
     def want(self, time_ms: int):
-        if not Settings().get("player/seek_preview"):
+        previewer = self._previewer()
+        if previewer is None:
             return
 
-        previewer = self._block._ctx.seek_preview
         path = self._block.video_params.uri
 
         if not previewer.is_readable(path):
@@ -44,6 +57,15 @@ class PreviewControl(VideoBlockPart):
                 this.show(path, image)
 
         previewer.request(path, time_ms, receiver)
+
+    def _previewer(self):
+        """The player's previewer, None while the setting is off or where
+        the player has none."""
+
+        if not Settings().get("player/seek_preview"):
+            return None
+
+        return getattr(self._block._ctx, "seek_preview", None)
 
     def show(self, path, image):
         block = self._block

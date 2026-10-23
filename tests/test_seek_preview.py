@@ -15,11 +15,13 @@ from PyQt5.QtGui import QColor, QImage
 
 from gridplayer.models.seek_mark import SeekMark, SeekMarkKind
 from gridplayer.utils import seek_preview
-from gridplayer.utils.seek_preview import SeekPreviewer, preview_size
+from gridplayer.utils.seek_preview import SeekPreviewer
+from gridplayer.utils.seek_preview_reader import preview_size
 from gridplayer.widgets.video_block_preview import PreviewControl
 from gridplayer.widgets.video_overlay import OverlayBlock
 from gridplayer.widgets.video_overlay_elements import (
     HOVER_PREVIEW_GAP_PX,
+    HOVER_PREVIEW_MIN_PX,
     HOVER_PREVIEW_PX,
 )
 
@@ -37,7 +39,7 @@ def _picture(width=320, height=180, color="#3070c0"):
 def overlay():
     overlay = OverlayBlock()
     overlay.setAttribute(Qt.WA_DontShowOnScreen)
-    overlay.resize(520, 300)
+    overlay.resize(900, 600)
     overlay.set_color("#ffffff")
     overlay.set_position(27000, LENGTH)
     overlay.show()
@@ -77,7 +79,7 @@ class TestTheLabel:
 
         assert label.preview is not None
         assert label.width() >= HOVER_PREVIEW_PX
-        assert label.height() == bare.height() + 90 + HOVER_PREVIEW_GAP_PX
+        assert label.height() == bare.height() + 180 + HOVER_PREVIEW_GAP_PX
 
     def test_a_tall_picture_is_as_tall_as_a_wide_one_is_wide(self, overlay):
         label = _hover(overlay)
@@ -104,6 +106,17 @@ class TestTheLabel:
         middle = image.pixelColor(image.width() // 2, 5 + 45)
 
         assert middle.name() == "#3070c0"
+
+    def test_a_shorter_cell_shows_it_smaller_still_above_the_bar(self, overlay):
+        overlay.resize(900, 240)
+        label = _hover(overlay)
+        bare = label.size()
+
+        overlay.set_preview(_picture())
+
+        shown = label.height() - bare.height() - HOVER_PREVIEW_GAP_PX
+        assert HOVER_PREVIEW_MIN_PX // 2 < shown < 180
+        assert label.geometry().top() >= 0
 
     def test_a_cell_too_short_for_it_shows_the_time_alone(self, overlay):
         overlay.resize(520, 90)
@@ -206,10 +219,10 @@ class TestTheSize:
     @pytest.mark.parametrize(
         ("size", "read"),
         [
-            ((1920, 1080), (320, 180)),
-            ((1080, 1920), (180, 320)),
+            ((1920, 1080), (640, 360)),
+            ((1080, 1920), (360, 640)),
             # never made bigger
-            ((160, 90), (160, 90)),
+            ((320, 180), (320, 180)),
             ((0, 0), (0, 0)),
         ],
     )
@@ -267,6 +280,30 @@ class TestTheCell:
         PreviewControl(block).want(5000)
 
         assert self._asked(block) == []
+
+    def test_a_video_file_loaded_starts_the_previewer(self, block):
+        PreviewControl(block).warm_up()
+
+        block._ctx.seek_preview.warm_up.assert_called_once_with()
+
+    @pytest.mark.parametrize(
+        "change",
+        [{"is_local_file": False}, {"video_tracks": []}],
+    )
+    def test_not_for_what_will_not_be_previewed(self, block, change):
+        for name, value in change.items():
+            setattr(block, name, value)
+
+        PreviewControl(block).warm_up()
+
+        block._ctx.seek_preview.warm_up.assert_not_called()
+
+    def test_not_started_with_the_setting_off(self, block):
+        block.settings["player/seek_preview"] = False
+
+        PreviewControl(block).warm_up()
+
+        block._ctx.seek_preview.warm_up.assert_not_called()
 
     def test_not_with_the_setting_off(self, block):
         block.settings["player/seek_preview"] = False
