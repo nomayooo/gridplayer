@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 
+- Let more of the picture through the title box over a video, and draw a 1px border round the active video instead of 5px ([#7](https://github.com/nomayooo/gridplayer/pull/7))
 - Mark the loop playing on the seek bar with a 3px green line and the other loops with 2px blue ones ([#4](https://github.com/nomayooo/gridplayer/pull/4))
 - Rename Aspect to View Mode: Fill, Fit and Stretch ([7c0247c](https://github.com/vzhd1701/gridplayer/commit/7c0247c1336ba973ce5b4a40b10f5a7dfbda967f))
 - Merge Playlist Settings, Bookmarks and Lists dialogs into a single Playlist window ([1b4b00f](https://github.com/vzhd1701/gridplayer/commit/1b4b00f5f720a496a3c6dd24d4d1f00f89f80c26))
