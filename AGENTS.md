@@ -196,6 +196,12 @@ zip itself, named after the branch (`<branch>-GridPlayer-dev-win64-portable.zip`
 `/` as `-`). It builds no installer, runs no tests and publishes nothing; it
 is not the prerelease.
 
+Once the build has finished, also post in the chat the direct download link
+to the zip: list the run's artifacts and give
+`https://github.com/nomayooo/gridplayer/actions/runs/<run id>/artifacts/<artifact id>`
+for the portable zip. It works for anyone signed in to GitHub, until the
+artifact expires after 7 days.
+
 ## Changelog
 
 A pull request that changes what a user sees or does adds its own entry to
