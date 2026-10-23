@@ -832,22 +832,47 @@ def test_opaque_active_ring_shows_on_a_picture_of_its_own_colour():
     picture, it was not there at all. Its inside edge is drawn in the grey
     of the shadow instead."""
 
+    ring = _opaque_ring(border_width=5)
+    row = _ring_row(ring)
+
+    assert {color.name() for color in row[:4]} == {"#ffffff"}
+    assert row[4].name() == ring.color_contrast_mid.name() == "#9b9b9b"
+    assert row[5].alpha() == 0
+
+
+def test_opaque_active_ring_of_one_pixel_is_its_colour():
+    """No room for the grey edge as well: the ring is the video's colour."""
+
+    ring = _opaque_ring(border_width=1)
+    row = _ring_row(ring)
+
+    assert row[0].name() == "#ffffff"
+    assert row[1].alpha() == 0
+
+
+def test_the_active_ring_is_one_pixel():
+    assert OverlayBorder.border_width == 1
+
+
+def _opaque_ring(border_width):
     parent = QWidget()
     parent.is_opaque = True
     ring = OverlayBorder(parent=parent)
+    ring.border_width = border_width
     ring.color = "#ffffff"
     ring.resize(100, 80)
+    # kept with it, as the parent goes when the test lets go of it
+    ring._test_parent = parent
 
+    return ring
+
+
+def _ring_row(ring):
     image = QImage(100, 80, QImage.Format_ARGB32)
     image.fill(Qt.transparent)
     ring.render(image, QPoint(0, 0), QRegion(), QWidget.DrawChildren)
 
-    width = ring.border_width
-    row = [image.pixelColor(x, 40) for x in range(width + 1)]
-
-    assert {color.name() for color in row[: width - 1]} == {"#ffffff"}
-    assert row[width - 1].name() == ring.color_contrast_mid.name() == "#9b9b9b"
-    assert row[width].alpha() == 0
+    return [image.pixelColor(x, 40) for x in range(ring.border_width + 1)]
 
 
 def test_opaque_mask_not_reapplied_when_unchanged(mocker):

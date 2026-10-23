@@ -5,11 +5,13 @@ from PyQt5.QtCore import QPoint, Qt
 from PyQt5.QtGui import QColor, QImage, QPainter
 
 from gridplayer.widgets.video_overlay_elements import (
+    BOX_FILL_ALPHA,
     BOX_RADIUS,
     LOOP_MARK_COLOR,
     LOOP_MARK_WIDTH,
     OTHER_LOOP_MARK_COLOR,
     OTHER_LOOP_MARK_WIDTH,
+    OverlayLabel,
     OverlayProgressBar,
     OverlayVolumeBar,
 )
@@ -174,3 +176,16 @@ class TestLoopMarks:
 
     def test_the_lines_are_3_and_2_pixels(self):
         assert (LOOP_MARK_WIDTH, OTHER_LOOP_MARK_WIDTH) == (3, 2)
+
+
+class TestSeeThrough:
+    def test_the_title_lets_half_the_picture_through(self):
+        title = OverlayLabel()
+
+        assert title.fill_color.alphaF() == pytest.approx(0.5, abs=0.01)
+
+        title.close()
+
+    def test_the_other_boxes_keep_theirs(self, seek_bar):
+        assert BOX_FILL_ALPHA == 0.7
+        assert seek_bar.fill_color.alphaF() == pytest.approx(0.7, abs=0.01)

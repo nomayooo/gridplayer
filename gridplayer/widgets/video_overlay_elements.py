@@ -36,6 +36,8 @@ BOX_RADIUS = 4.0
 BOX_SHADOW_RINGS = 4
 BOX_SHADOW_DROP = 1
 BOX_SHADOW_ALPHA = 0.45
+# the title's box lets more of the picture through, a box over the top of it
+TITLE_FILL_ALPHA = 0.5
 
 # how far round a box its shadow reaches, for what is painted again with it
 BOX_SHADOW_MARGIN = BOX_SHADOW_RINGS + BOX_SHADOW_DROP + 1
@@ -491,6 +493,9 @@ class OverlayWidget(QWidget):
     # whether the overlay casts a soft shadow round its box, see OverlayBlock
     casts_shadow = True
 
+    # how much of the picture its box hides, but on the opaque overlay
+    fill_alpha = BOX_FILL_ALPHA
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -576,7 +581,7 @@ class OverlayWidget(QWidget):
         color = QColor(self.color)
 
         if not self._is_solid:
-            color.setAlphaF(BOX_FILL_ALPHA)
+            color.setAlphaF(self.fill_alpha)
 
         return color
 
@@ -659,6 +664,8 @@ class OverlayWidget(QWidget):
 
 
 class OverlayLabel(OverlayWidget):
+    fill_alpha = TITLE_FILL_ALPHA
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -2117,7 +2124,7 @@ class OverlayVolumeBar(OverlayBar):
 
 
 class OverlayBorder(OverlayWidget):
-    border_width = 5
+    border_width = 1
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -2147,11 +2154,13 @@ class OverlayBorder(OverlayWidget):
             # A window's shape has no shadow to give, so the ring's inner
             # edge is drawn in the grey of the shadow's darkest line in place
             # of one: the ring alone is lost on a picture of its own colour.
+            # A ring no wider than that edge is all colour.
+            edge = OPAQUE_RING_EDGE if self.border_width > OPAQUE_RING_EDGE else 0
             painter.setBrush(QBrush(self.color_contrast_mid))
             painter.setClipPath(self._ring_path())
             painter.drawRect(self.rect())
             painter.setBrush(QBrush(self.color))
-            painter.setClipPath(self._ring_path(self.border_width - OPAQUE_RING_EDGE))
+            painter.setClipPath(self._ring_path(self.border_width - edge))
             painter.drawRect(self.rect())
             self._apply_ring_mask()
             return
