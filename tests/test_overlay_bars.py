@@ -6,6 +6,10 @@ from PyQt5.QtGui import QColor, QImage, QPainter
 
 from gridplayer.widgets.video_overlay_elements import (
     BOX_RADIUS,
+    LOOP_MARK_COLOR,
+    LOOP_MARK_WIDTH,
+    OTHER_LOOP_MARK_COLOR,
+    OTHER_LOOP_MARK_WIDTH,
     OverlayProgressBar,
     OverlayVolumeBar,
 )
@@ -113,3 +117,60 @@ class TestAheadOfTheMouse:
         assert ahead.name() == seek_bar.color_ahead.name()
         assert ahead.blue() - ahead.red() > 60
         assert abs(rest.blue() - rest.red()) < 5
+
+
+def _line_at(image, x, y):
+    """The colour at x, and how many pixels wide it runs there."""
+
+    color = image.pixel(x, y)
+
+    left = x
+    while left > 0 and image.pixel(left - 1, y) == color:
+        left -= 1
+
+    right = x
+    while right < image.width() - 1 and image.pixel(right + 1, y) == color:
+        right += 1
+
+    return QColor(color).name(), right - left + 1
+
+
+class TestLoopMarks:
+    """On the 200px bar: the loop playing from 50px to 100px, another
+    waiting from 150px to 180px."""
+
+    @pytest.fixture
+    def image(self, seek_bar):
+        seek_bar.loop_start = 0.25
+        seek_bar.loop_end = 0.5
+        seek_bar.other_loops = ((0.75, 0.9),)
+
+        return _over_dark_picture(seek_bar)
+
+    @pytest.mark.parametrize("x", [50, 100])
+    def test_the_loop_playing_is_green_and_widest(self, image, x):
+        assert _line_at(image, x, image.height() // 2) == (
+            LOOP_MARK_COLOR,
+            LOOP_MARK_WIDTH,
+        )
+
+    @pytest.mark.parametrize("x", [150, 180])
+    def test_the_loops_waiting_are_blue(self, image, x):
+        assert _line_at(image, x, image.height() // 2) == (
+            OTHER_LOOP_MARK_COLOR,
+            OTHER_LOOP_MARK_WIDTH,
+        )
+
+    def test_a_loop_alone_is_green_and_widest_too(self, seek_bar):
+        seek_bar.loop_start = 0.25
+        seek_bar.loop_end = 0.5
+
+        image = _over_dark_picture(seek_bar)
+
+        assert _line_at(image, 50, image.height() // 2) == (
+            LOOP_MARK_COLOR,
+            LOOP_MARK_WIDTH,
+        )
+
+    def test_the_lines_are_3_and_2_pixels(self):
+        assert (LOOP_MARK_WIDTH, OTHER_LOOP_MARK_WIDTH) == (3, 2)
