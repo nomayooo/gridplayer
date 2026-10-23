@@ -180,10 +180,31 @@ jobs:
           just clean-pyinstaller-dist
 
       - name: Save release binaries for windows ${{ matrix.arch }}
+        if: ${{ !inputs.windows_x64_only }}
         uses: actions/upload-artifact@v7
         with:
           name: release_dist_bin_windows_${{ matrix.arch }}
           path: dist
+          retention-days: ${{ env.RETENTION_DAYS }}
+
+      # The build to try out: the portable zip as it is, not zipped again,
+      # named after the branch it was built from
+      - name: Name the portable zip after the branch
+        if: inputs.windows_x64_only
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          prefix=$(printf '%s' "$REF_NAME" | tr -c 'A-Za-z0-9._-' '-')
+          for zip in dist/*-portable.zip; do
+            mv "$zip" "dist/$prefix-$(basename "$zip")"
+          done
+
+      - name: Save the portable zip
+        if: inputs.windows_x64_only
+        uses: actions/upload-artifact@v7
+        with:
+          path: dist/*-portable.zip
+          archive: false
           retention-days: ${{ env.RETENTION_DAYS }}
 
   build_appimage:

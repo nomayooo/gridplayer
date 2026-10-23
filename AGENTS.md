@@ -191,9 +191,10 @@ the entry happens to exist, but never reaches translators.
 
 When the user wants to try a change as a Windows build, push its branch and
 dispatch the `build_windows` workflow on it (`workflow_dispatch`, ref = the
-branch). Give them the run's link: the 64-bit portable zip is in its
-`release_dist_bin_windows_x64` artifact. It builds no installer, runs no tests
-and publishes nothing; it is not the prerelease.
+branch). Give them the run's link: its one artifact is the 64-bit portable
+zip itself, named after the branch (`<branch>-GridPlayer-dev-win64-portable.zip`,
+`/` as `-`). It builds no installer, runs no tests and publishes nothing; it
+is not the prerelease.
 
 ## Changelog
 
