@@ -8,7 +8,7 @@ on:
         type: boolean
         default: false
       windows_x64_only:
-        description: 'Build the 64-bit Windows package alone, to try a branch out'
+        description: 'Build the 64-bit Windows portable zip alone, to try a branch out'
         type: boolean
         default: false
     outputs:
@@ -173,6 +173,8 @@ jobs:
       - name: Build
         env:
           BUILD_ARCH: ${{ matrix.arch == 'x86' && 'win32' || 'win64' }}
+          # the build to try out takes the portable zip alone
+          BUILD_PORTABLE_ONLY: ${{ inputs.windows_x64_only && '1' || '' }}
         run: |
           just build-win-package
           just clean-pyinstaller-dist
