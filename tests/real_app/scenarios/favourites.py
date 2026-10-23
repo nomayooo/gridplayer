@@ -1,5 +1,6 @@
 """A video with a loop made a favourite, kept, and opened again from the
-Favourites menu into a cell of its own beside it, its loop with it."""
+Favourites menu into a cell of its own beside it, its loop with it; then
+again with a loop begun and not finished, which it is opened with too."""
 
 
 def _at(d, a, ms, what):
@@ -53,3 +54,35 @@ def scenario(d):
         d.check("in the manager", window.tree.topLevelItem(0).text(0) == "My clip")
 
     d.through_modal(lambda: d.act(a, "Manage Favourites"), "manage favourites", look)
+
+    # a loop begun at 8s and not finished: kept, and begun again on opening
+    _at(d, a, 8_000, "at 8s")
+    d.act(a, "Set Loop Start")
+    loop_start = a.video_params.loop_start
+    d.check("a loop begun", loop_start is not None, loop_start)
+
+    def name_begun(window):
+        d.check("offered with the loop begun", not window.loop_start_note.isHidden())
+        window.name.setText("Begun")
+        window.accept()
+
+    d.through_modal(lambda: d.act(a, "Add to Favourites"), "add begun", name_begun)
+
+    begun = Settings().get("favourites").root[-1]
+    d.check(
+        "the loop begun kept",
+        (begun.loops, begun.loop_start) == (loops, loop_start),
+        begun.model_dump(mode="json"),
+    )
+
+    d.choose(a, "menu_generator_favourites", "Begun")
+    d.wait_until(lambda: len(d.cells) == 3, "a third cell")
+    c = d.cells[2]
+    d.wait_until(lambda: c.is_playable, "the begun favourite plays")
+    d.check("with the loop begun", c.video_params.loop_start == loop_start)
+    d.check("and the loop made", c.video_params.loops == loops, c.video_params.loops)
+    # on from there, not from the start of the file: what time it says
+    # before it plays is only where it was asked to be
+    d.wait_until(lambda: c.time > loop_start + 300, "playing on", timeout=5)
+    d.check("from the loop start", c.time < loop_start + 2_500, c.time)
+    d.shot("opened with a loop begun")

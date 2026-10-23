@@ -3,7 +3,8 @@ browser keeps its favourites: kept with the player's settings, not with a
 playlist, and each opened into the grid as a video of its own.
 
 A favourite is a file on disk, with a name of the viewer's and the A-B loops
-it had when it was made a favourite, which it is opened with again.
+it had when it was made a favourite, a loop begun and not finished among them,
+which it is opened with again.
 """
 
 from pathlib import Path
@@ -24,6 +25,9 @@ class FavouriteVideo(BaseModel):
     name: str
     path: Path
     loops: list[LoopSpan] = Field(default_factory=list)
+    # where a loop begun and not yet finished starts (models.video's
+    # loop_start), None for none
+    loop_start: int | None = None
 
 
 class FavouriteFolder(BaseModel):

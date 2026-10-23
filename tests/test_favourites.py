@@ -29,8 +29,10 @@ HERE = Path(__file__).resolve()
 GONE = HERE.parent / "no such video.mp4"
 
 
-def _video(name="Clip", path=HERE, loops=()):
-    return FavouriteVideo(name=name, path=path, loops=list(loops))
+def _video(name="Clip", path=HERE, loops=(), loop_start=None):
+    return FavouriteVideo(
+        name=name, path=path, loops=list(loops), loop_start=loop_start
+    )
 
 
 def _favourites():
@@ -43,7 +45,7 @@ def _favourites():
             FavouriteFolder(
                 name="Music",
                 items=[
-                    _video("Song", loops=[(0, 500), (700, None)]),
+                    _video("Song", loops=[(0, 500), (700, None)], loop_start=900),
                     FavouriteFolder(name="Live", items=[_video("Gig")]),
                 ],
             ),
@@ -60,6 +62,14 @@ class TestTheModel:
 
         assert read == favourites
         assert read.items_at((1,))[0].loops == [(0, 500), (700, None)]
+        assert read.items_at((1,))[0].loop_start == 900
+
+    def test_kept_before_loop_starts_were_read_without_one(self):
+        read = Favourites.model_validate_json(
+            '[{"kind": "video", "name": "Old", "path": "/v.mp4", "loops": []}]'
+        )
+
+        assert read.root[0].loop_start is None
 
     def test_a_folder_by_where_it_is(self):
         favourites = _favourites()
@@ -212,8 +222,17 @@ class TestIntoTheGrid:
         ((first, second),) = adder.added
         assert first.uri == HERE
         assert first.loops == [(1000, 2000), (3000, None)]
+        assert first.loop_start is None
         assert second.loops == []
         adder._ctx.commands.add_recent_uris.assert_called_once_with([HERE, HERE])
+
+    def test_with_a_loop_begun_and_not_finished(self, adder):
+        adder.add_favourite_videos([_video(loops=[(1000, 2000)], loop_start=5000)])
+
+        ((video,),) = adder.added
+        assert video.loops == [(1000, 2000)]
+        assert video.loop_start == 5000
+        assert video.current_position == 5000
 
     def test_a_file_gone_is_said_and_the_rest_opened(self, adder):
         adder.add_favourite_videos([_video(path=GONE), _video()])
@@ -229,11 +248,11 @@ class TestIntoTheGrid:
         adder._ctx.commands.add_recent_uris.assert_not_called()
 
 
-def _block(uri=HERE, title="Shown title", loops=()):
+def _block(uri=HERE, title="Shown title", loops=(), loop_start=None):
     return SimpleNamespace(
         is_local_file=isinstance(uri, Path),
         title=title,
-        video_params=SimpleNamespace(uri=uri, loops=list(loops)),
+        video_params=SimpleNamespace(uri=uri, loops=list(loops), loop_start=loop_start),
     )
 
 
@@ -250,6 +269,17 @@ class TestMakingOne:
         assert asked.call_args.kwargs["loops"] == 1
         added = stored["favourites"].items_at((1, 1))[-1]
         assert added == FavouriteVideo(name="My clip", path=HERE, loops=[(500, 900)])
+
+    def test_a_loop_begun_and_not_finished_kept_too(self, stored, monkeypatch):
+        asked = Mock(return_value=(stored["favourites"], (), "Begun"))
+        monkeypatch.setattr(manager_module.AddFavouriteDialog, "ask", asked)
+
+        _manager(active=_block(loop_start=12_000)).cmd_add_to_favourites()
+
+        assert asked.call_args.kwargs["loops"] == 0
+        assert asked.call_args.kwargs["loop_start"] == 12_000
+        added = stored["favourites"].root[-1]
+        assert (added.loops, added.loop_start) == ([], 12_000)
 
     def test_named_after_the_file_without_a_title(self, stored, monkeypatch):
         asked = Mock(return_value=None)
@@ -352,6 +382,14 @@ class TestTheAddWindow:
         dialog = AddFavouriteDialog(Favourites(), name="C", loops=3)
         assert not dialog.loops_note.isHidden()
         assert "3" in dialog.loops_note.text()
+        assert dialog.loop_start_note.isHidden()
+
+    def test_a_loop_begun_is_said(self):
+        dialog = AddFavouriteDialog(Favourites(), name="C", loops=0, loop_start=12_000)
+
+        assert dialog.loops_note.isHidden()
+        assert not dialog.loop_start_note.isHidden()
+        assert "0:12.000" in dialog.loop_start_note.text()
 
 
 def _tree_item(dialog, *path):
@@ -367,6 +405,13 @@ class TestTheManageWindow:
     def test_as_it_was_given_back_untouched(self):
         assert ManageFavouritesDialog(_favourites()).favourites() == _favourites()
 
+    def test_loops_and_a_loop_begun_are_shown(self):
+        dialog = ManageFavouritesDialog(_favourites())
+
+        assert _tree_item(dialog, 0).text(1) == "1"
+        assert _tree_item(dialog, 1, 0).text(1) == "2, start at 0:00.900"
+        assert _tree_item(dialog, 1, 1, 0).text(1) == ""
+
     def test_renamed(self):
         dialog = ManageFavouritesDialog(_favourites())
 
@@ -376,7 +421,7 @@ class TestTheManageWindow:
         favourites = dialog.favourites()
         assert favourites.root[1].name == "Songs"
         assert favourites.items_at((1,))[0] == _video(
-            "Tune", loops=[(0, 500), (700, None)]
+            "Tune", loops=[(0, 500), (700, None)], loop_start=900
         )
 
     def test_a_name_cleared_is_kept(self):

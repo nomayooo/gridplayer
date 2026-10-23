@@ -131,6 +131,7 @@ class FavouritesManager(ManagerBase):
             favourites=favourites,
             name=block.title or Path(params.uri).stem,
             loops=len(params.loops),
+            loop_start=params.loop_start,
         )
 
         if added is None:
@@ -140,7 +141,12 @@ class FavouritesManager(ManagerBase):
 
         favourites.add(
             folder,
-            FavouriteVideo(name=name, path=params.uri, loops=list(params.loops)),
+            FavouriteVideo(
+                name=name,
+                path=params.uri,
+                loops=list(params.loops),
+                loop_start=params.loop_start,
+            ),
         )
 
         self._save(favourites)

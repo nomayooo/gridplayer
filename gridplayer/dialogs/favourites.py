@@ -29,11 +29,18 @@ from gridplayer.models.favourites import (
     FolderPath,
 )
 from gridplayer.utils.qt import count_txt, translate
+from gridplayer.utils.time_txt import ms_time_txt
 
 FOLDER_INDENT = "    "
 
 # what an item of the tree is: a video's favourite, or nothing for a folder
 ITEM_FAVOURITE = Qt.UserRole
+
+
+def _loop_start_txt(loop_start: int) -> str:
+    return translate("Favourites", "start at {TIME}").format(
+        TIME=ms_time_txt(loop_start, strip=True)
+    )
 
 
 def _new_folder_name(parent) -> str | None:
@@ -51,7 +58,14 @@ def _new_folder_name(parent) -> str | None:
 class AddFavouriteDialog(QDialog):
     """The active video made a favourite: under what name, in which folder."""
 
-    def __init__(self, favourites: Favourites, name: str, loops: int, **kwargs):
+    def __init__(
+        self,
+        favourites: Favourites,
+        name: str,
+        loops: int,
+        loop_start: int | None = None,
+        **kwargs,
+    ):
         super().__init__(**kwargs)
 
         self.setWindowTitle(translate("Favourites", "Add to Favourites"))
@@ -78,6 +92,16 @@ class AddFavouriteDialog(QDialog):
             )
         )
 
+        # a loop begun and not finished, kept with it too
+        self.loop_start_note = QLabel(self)
+        self.loop_start_note.setVisible(loop_start is not None)
+        if loop_start is not None:
+            self.loop_start_note.setText(
+                translate("Favourites", "A-B loop start kept with it: {TIME}").format(
+                    TIME=ms_time_txt(loop_start, strip=True)
+                )
+            )
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self
         )
@@ -99,6 +123,7 @@ class AddFavouriteDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addLayout(form)
         layout.addWidget(self.loops_note)
+        layout.addWidget(self.loop_start_note)
         layout.addWidget(buttons)
 
         self.fill_folders()
@@ -137,11 +162,24 @@ class AddFavouriteDialog(QDialog):
         self.fill_folders(selected=new_path)
 
     @classmethod
-    def ask(cls, parent, favourites: Favourites, name: str, loops: int):
+    def ask(
+        cls,
+        parent,
+        favourites: Favourites,
+        name: str,
+        loops: int,
+        loop_start: int | None = None,
+    ):
         """(the favourites with any folders made, the folder picked, the
         name given), None for the viewer thinking better of it."""
 
-        dialog = cls(favourites=favourites, name=name, loops=loops, parent=parent)
+        dialog = cls(
+            favourites=favourites,
+            name=name,
+            loops=loops,
+            loop_start=loop_start,
+            parent=parent,
+        )
 
         if not dialog.exec():
             return None
@@ -244,9 +282,11 @@ class ManageFavouritesDialog(QDialog):
         return tree_item
 
     def _video_item(self, video: FavouriteVideo) -> QTreeWidgetItem:
-        loops = str(len(video.loops)) if video.loops else ""
+        loops = [count_txt(len(video.loops))] if video.loops else []
+        if video.loop_start is not None:
+            loops.append(_loop_start_txt(video.loop_start))
 
-        tree_item = QTreeWidgetItem([video.name, loops, str(video.path)])
+        tree_item = QTreeWidgetItem([video.name, ", ".join(loops), str(video.path)])
         tree_item.setIcon(0, QIcon.fromTheme("add-files"))
         tree_item.setToolTip(2, str(video.path))
         tree_item.setData(0, ITEM_FAVOURITE, video)
