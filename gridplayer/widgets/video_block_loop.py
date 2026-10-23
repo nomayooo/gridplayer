@@ -1,14 +1,27 @@
-"""The loop of a video block: the stretch of it played over and over, and
-whether each pass starts somewhere at random.
+"""The loops of a video block: the stretches of it played over and over, one
+after another in the order they were made and round again, and whether each
+pass starts somewhere at random.
+
+A loop is made in two steps. Set Loop Start begins one where the video is,
+and until it is finished the video plays from there to the end of the file
+and round, the loops made before it waiting; a seek may go anywhere, before
+it too, so that it can be put wherever it is wanted, Set Loop Start again
+moving it there. Set Loop End finishes it where the video is then, and it
+joins the others, playing; without one begun, Set Loop End does nothing.
 
 Where a loop ends up taking the video is the block's (see loop_start,
-loop_end and time_changed); here is only how the viewer sets it.
+loop_end and time_changed); here is only how the viewer sets them.
 """
 
+from gridplayer.models.video import LoopSpan
 from gridplayer.widgets.video_block_guards import VideoBlockPart, only_seekable
 
 
 class LoopControl(VideoBlockPart):
+    @property
+    def _params(self):
+        return self._block.video_params
+
     @only_seekable
     def toggle_random(self):
         self.set_random(not self._block.video_params.is_start_random)
@@ -22,43 +35,183 @@ class LoopControl(VideoBlockPart):
 
         self._block.video_params.is_start_random = is_start_random
 
+    # making them
+
     @only_seekable
     def set_start(self):
         self.set_start_time(self._block.time)
 
     @only_seekable
-    def set_start_time(self, new_time):
-        if None not in {self._block.video_params.loop_end, new_time}:
-            if new_time >= self._block.video_params.loop_end:
-                return
-
-        self._block.video_params.loop_start = new_time
+    def set_start_time(self, new_time: int):
+        """Begin a loop here, or move the start of the one begun."""
 
         if new_time is None:
-            self._block.loop_start_change.emit(0)
-        else:
-            self._block.loop_start_change.emit(
-                new_time / self._block.video_driver.length
-            )
+            return
+
+        self._params.loop_start = new_time
+
+        self.announce()
 
     @only_seekable
     def set_end(self):
         self.set_end_time(self._block.time)
 
     @only_seekable
-    def set_end_time(self, new_time):
-        if None not in {self._block.video_params.loop_start, new_time}:
-            if new_time <= self._block.video_params.loop_start:
-                return
+    def set_end_time(self, new_time: int):
+        """Finish the loop begun here, and play it; nothing without one, or
+        here being no later than it starts."""
 
-        self._block.video_params.loop_end = new_time
+        start = self._params.loop_start
 
-        if new_time is None:
-            self._block.loop_end_change.emit(100.0)
-        else:
-            self._block.loop_end_change.emit(new_time / self._block.video_driver.length)
+        if start is None or new_time is None or new_time <= start:
+            return
+
+        self._add((start, new_time))
+
+    def replace_with(self, span: LoopSpan):
+        """This one loop in place of any there were."""
+
+        self._params.loops = []
+        self._add(span)
+
+    def _add(self, span: LoopSpan):
+        self._params.loops.append(span)
+        self._params.loop_index = len(self._params.loops) - 1
+        self._params.loop_start = None
+
+        self.announce()
+
+    # taking them away
 
     @only_seekable
     def reset(self):
-        self.set_start_time(None)
-        self.set_end_time(None)
+        self.clear()
+
+    def clear(self):
+        """No loops, finished or begun: the whole video plays."""
+
+        self._params.loops = []
+        self._params.loop_index = 0
+        self._params.loop_start = None
+
+        self.announce()
+
+    @only_seekable
+    def remove_last(self):
+        """Take back the loop begun, or else the last one made."""
+
+        params = self._params
+
+        if params.loop_start is not None:
+            params.loop_start = None
+        elif params.loops:
+            params.loops.pop()
+            if params.loop_index >= len(params.loops):
+                params.loop_index = 0
+        else:
+            return
+
+        self.announce()
+
+    # going from one to another
+
+    @only_seekable
+    def next(self):
+        self._go(1)
+
+    @only_seekable
+    def previous(self):
+        self._go(-1)
+
+    def _go(self, step: int):
+        if not self.step(step):
+            return
+
+        self._block._loop_to_start()
+
+    def step(self, step: int) -> bool:
+        """Make the loop that many on from the one playing, round the end of
+        them, the one playing; whether there was another to go to. None while
+        one is being made, which is the only one playing then."""
+
+        params = self._params
+
+        if params.loop_start is not None or len(params.loops) < 2:
+            return False
+
+        params.loop_index = (params.loop_index + step) % len(params.loops)
+
+        self.announce()
+
+        return True
+
+    def adopt_at(self, time_ms: int):
+        """Play the loop a time is in, the next one round from the one playing
+        that has it, if the one playing does not: where a viewer's seek
+        landed, which would otherwise be taken back into the loop playing."""
+
+        params = self._params
+
+        if params.loop_start is not None or len(params.loops) < 2:
+            return
+
+        if self._is_in(params.loops[params.loop_index], time_ms):
+            return
+
+        count = len(params.loops)
+        for offset in range(1, count):
+            index = (params.loop_index + offset) % count
+            if self._is_in(params.loops[index], time_ms):
+                params.loop_index = index
+                self.announce()
+                return
+
+    def _is_in(self, span: LoopSpan, time_ms: int) -> bool:
+        start, end = span
+        if end is None:
+            end = self._length()
+
+        return start <= time_ms <= end
+
+    # showing them
+
+    def announce(self):
+        """Tell the overlay where the loops are: the one playing, and the
+        rest apart from it."""
+
+        block = self._block
+        params = self._params
+
+        current = params.current_loop
+
+        if current is None:
+            block.loop_start_change.emit(0)
+            block.loop_end_change.emit(100.0)
+        else:
+            start, end = current
+            block.loop_start_change.emit(self._fraction(start))
+            block.loop_end_change.emit(100.0 if end is None else self._fraction(end))
+
+        others = tuple(
+            (self._fraction(start), 1.0 if end is None else self._fraction(end))
+            for index, (start, end) in enumerate(params.loops)
+            if params.loop_start is not None or index != params.loop_index
+        )
+
+        block.loops_change.emit(others)
+
+    def _fraction(self, time_ms: int) -> float:
+        length = self._length()
+
+        if not length:
+            return 0
+
+        return time_ms / length
+
+    def _length(self) -> int:
+        driver = self._block.video_driver
+
+        if driver is None or not driver.length:
+            return 0
+
+        return driver.length

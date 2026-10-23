@@ -52,6 +52,9 @@ from gridplayer.params.static import (
 from gridplayer.playlist_settings import PlaylistSettings, session_field
 from gridplayer.utils.aspect_calc import parse_aspect_ratio
 
+# a loop: where it starts and ends in ms, an end of None the end of the file
+LoopSpan = tuple[int, int | None]
+
 _LEGACY_END_ACTION = {
     "none": VideoEndAction.STOP,
     "single_file": VideoEndAction.LOOP_FILE,
@@ -172,8 +175,16 @@ class Video(BaseModel):
 
     # Seekable video
     current_position: int = 0
+    # the loops the viewer made, in the order they were made, played one
+    # after another and round again: (start, end) in ms, an end of None
+    # being the end of the file
+    loops: list[LoopSpan] = Field(default_factory=list)
+    # which of them is playing
+    loop_index: int = 0
+    # where a loop not finished yet starts: one Set Loop Start began and Set
+    # Loop End has not finished. Meanwhile it plays from there to the end of
+    # the file and round, the loops made before it waiting
     loop_start: int | None = None
-    loop_end: int | None = None
 
     end_action: VideoEndAction = session_field("video_defaults/end_action")
     # whether the next, previous or a random file is looked for in the
@@ -337,6 +348,32 @@ class Video(BaseModel):
 
         return self
 
+    @model_validator(mode="after")
+    def _loop_index_in_range(self) -> "Video":
+        if not 0 <= self.loop_index < max(len(self.loops), 1):
+            self.loop_index = 0
+
+        return self
+
+    @property
+    def is_loop_open(self) -> bool:
+        """Whether a loop has been started and not yet finished."""
+
+        return self.loop_start is not None
+
+    @property
+    def current_loop(self) -> LoopSpan | None:
+        """The stretch played over and over now, None for the whole video:
+        the loop being made, or else the one of the loops made playing."""
+
+        if self.loop_start is not None:
+            return self.loop_start, None
+
+        if not self.loops:
+            return None
+
+        return self.loops[self.loop_index]
+
     @model_validator(mode="before")
     @classmethod
     def _migrate_legacy_fields(cls, data: Any) -> Any:
@@ -356,6 +393,13 @@ class Video(BaseModel):
             data["end_action"] = migrate_end_action(data["end_action"])
 
         migrate_aspect(data, "aspect_mode")
+
+        # one loop, as there was before there could be several: with an end
+        # it was a finished one, from its start or the video's; a start
+        # alone stays what it was, a loop to the end of the file
+        legacy_loop_end = data.pop("loop_end", None)
+        if legacy_loop_end is not None and "loops" not in data:
+            data["loops"] = [(data.pop("loop_start", None) or 0, legacy_loop_end)]
 
         if "audio_selection" not in data:
             legacy_audio = _audio_selection_from_legacy(data)

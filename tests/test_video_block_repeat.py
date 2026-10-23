@@ -38,6 +38,8 @@ def _block(mocker, **video_kwargs):
     block.bookmarker.is_editing = False
     block._hold_end_for_bookmarks.return_value = False
     block._step_at_end = partial(VideoBlock._step_at_end, block)
+    block.is_loop_set = VideoBlock.is_loop_set.fget(block)
+    block.is_loop_sequence = VideoBlock.is_loop_sequence.fget(block)
     return block
 
 
@@ -203,10 +205,7 @@ def test_stop_playback_resets_position_and_segment_loop(mocker):
     VideoBlock.stop_playback(block)
 
     assert block.video_params.current_position == 0
-    assert block.video_params.loop_start is None
-    assert block.video_params.loop_end is None
-    block.loop_start_change.emit.assert_called_with(0)
-    block.loop_end_change.emit.assert_called_with(100.0)
+    block.loop.clear.assert_called_once_with()
 
 
 def test_set_playback_state_syncs_overlay_when_already_playing(mocker):
@@ -479,6 +478,7 @@ def _playing_block(mocker, is_wrapped):
     block.is_live = False
     block.is_stopped = False
     block.loop_start = 0
+    block.loop_floor = 0
     block.loop_end = 2000
     block._is_loop_wrapped.return_value = is_wrapped
     # no seek on its way anywhere
@@ -511,6 +511,7 @@ def test_time_changed_picks_up_the_wrap(mocker):
 def test_time_changed_sends_the_video_back_into_the_loop(mocker):
     block = _playing_block(mocker, is_wrapped=False)
     block.loop_start = 30000
+    block.loop_floor = 30000
 
     VideoBlock.time_changed(block, 12000)
 
@@ -584,6 +585,7 @@ def test_seek_holds_off_wrap_detection(mocker):
     block.is_video_initialized = True
     block.is_live = False
     block.loop_start = 0
+    block.loop_floor = 0
     block.loop_end = 2000
     block.video_driver.length = 2000
     block.sponsorblock._skip_spans = ()
@@ -607,6 +609,7 @@ def test_seek_marks_itself_before_it_is_made(mocker):
     block.is_video_initialized = True
     block.is_live = False
     block.loop_start = 0
+    block.loop_floor = 0
     block.loop_end = 10000
     block.video_driver.length = 10000
     block.sponsorblock._skip_spans = ()

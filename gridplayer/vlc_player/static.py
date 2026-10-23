@@ -479,8 +479,8 @@ class MediaInput:
         if self.length is None:
             raise ValueError("Length is not set")
 
-        loop_start = self.video.loop_start or 0
-        loop_end = self.video.loop_end or self.length
+        loop_start, loop_end = self.video.current_loop or (0, None)
+        loop_end = loop_end or self.length
 
         return random.randint(loop_start, loop_end)
 

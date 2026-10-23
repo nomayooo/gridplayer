@@ -434,6 +434,10 @@ class OverlayBlock(QWidget):
         self.progress_bar.loop_end = position
 
     @pyqtSlot(tuple)
+    def set_other_loops(self, loops):
+        self.progress_bar.other_loops = loops
+
+    @pyqtSlot(tuple)
     def set_seek_marks(self, marks):
         self.progress_bar.marks = marks
         self.floating_progress.marks = marks

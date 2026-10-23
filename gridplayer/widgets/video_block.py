@@ -160,6 +160,8 @@ class VideoBlock(QWidget):
     color_change = pyqtSignal(str)
     loop_start_change = pyqtSignal(float)
     loop_end_change = pyqtSignal(float)
+    # the loops other than the one playing, as (start, end) fractions
+    loops_change = pyqtSignal(tuple)
     seek_marks_change = pyqtSignal(tuple)
     is_paused_change = pyqtSignal(bool)
     is_stopped_change = pyqtSignal(bool)
@@ -457,6 +459,7 @@ class VideoBlock(QWidget):
             (self.color_change, overlay.set_color),
             (self.loop_start_change, overlay.set_loop_start),
             (self.loop_end_change, overlay.set_loop_end),
+            (self.loops_change, overlay.set_other_loops),
             (self.seek_marks_change, overlay.set_seek_marks),
             (self.is_paused_change, overlay.set_is_paused),
             # what it shows is the cell's to say, stopped or not
@@ -1060,14 +1063,22 @@ class VideoBlock(QWidget):
 
     @property
     def loop_start(self):
-        if self.video_params.loop_start is None:
+        """Where the loop playing starts, the video's start without one."""
+
+        current = self.video_params.current_loop
+
+        if current is None:
             return 0
 
-        return self.video_params.loop_start
+        return current[0]
 
     @property
     def loop_end(self):
-        if self.video_params.loop_end is None:
+        """Where the loop playing ends, the video's end without one."""
+
+        current = self.video_params.current_loop
+
+        if current is None or current[1] is None:
             length = 0
             if self.video_driver is not None:
                 length = self.video_driver.length
@@ -1075,7 +1086,28 @@ class VideoBlock(QWidget):
             # its own, and a finished pass is caught after the fact
             return length
 
-        return self.video_params.loop_end
+        return current[1]
+
+    @property
+    def loop_floor(self):
+        """How far back the video may go: where the loop playing starts,
+        but anywhere while one is being made, so that its start can be put
+        before where it was begun."""
+
+        if self.video_params.is_loop_open:
+            return 0
+
+        return self.loop_start
+
+    @property
+    def is_loop_set(self) -> bool:
+        return self.video_params.current_loop is not None
+
+    @property
+    def is_loop_sequence(self) -> bool:
+        """Whether the end of the loop playing goes on to another."""
+
+        return not self.video_params.is_loop_open and len(self.video_params.loops) > 1
 
     @property
     def is_end_a_loop(self) -> bool:
@@ -1085,12 +1117,9 @@ class VideoBlock(QWidget):
         action that loops the file. Everything else leaves the video behind.
         """
 
-        is_segment = (
-            self.video_params.loop_start is not None
-            or self.video_params.loop_end is not None
+        return (
+            self.is_loop_set or self.video_params.end_action == VideoEndAction.LOOP_FILE
         )
-
-        return is_segment or self.video_params.end_action == VideoEndAction.LOOP_FILE
 
     def set_drop_indicator(self, indicator: DropIndicator):
         self._drop_indicator = indicator
@@ -1234,7 +1263,7 @@ class VideoBlock(QWidget):
             return
 
         # 100ms headspace for slow callbacks
-        if self.time < self.loop_start - 100:
+        if self.time < self.loop_floor - 100:
             self._seek_loop_start()
 
         elif self.time > self.loop_end:
@@ -1331,7 +1360,7 @@ class VideoBlock(QWidget):
 
         is_plain_loop = (
             self.video_params.end_action == VideoEndAction.LOOP_FILE
-            and self.video_params.loop_start is None
+            and not self.is_loop_set
             and not self.video_params.is_start_random
         )
 
@@ -1350,11 +1379,10 @@ class VideoBlock(QWidget):
         )
 
     def loop_end_action(self):
-        # A loop start without an end is still a segment: start → EOF.
-        if (
-            self.video_params.loop_end is not None
-            or self.video_params.loop_start is not None
-        ):
+        # A loop start without an end is still a segment: start → EOF. One
+        # of several made goes on to the next, round to the first again.
+        if self.is_loop_set:
+            self.loop.step(1)
             self._loop_to_start()
             return
 
@@ -1406,7 +1434,7 @@ class VideoBlock(QWidget):
         pass as it was on the first.
         """
 
-        self.seek(self.loop_start, is_viewers=self.video_params.loop_start is not None)
+        self.seek(self.loop_start, is_viewers=self.is_loop_set)
 
     def _pause_at_start(self):
         self._seek_loop_start()
@@ -1457,10 +1485,7 @@ class VideoBlock(QWidget):
             self._ctx.lists.stop_waiting(self.video_params.id)
 
             self.video_params.current_position = 0
-            self.video_params.loop_start = None
-            self.video_params.loop_end = None
-            self.loop_start_change.emit(0)
-            self.loop_end_change.emit(100.0)
+            self.loop.clear()
 
         self._set_playback_state(VideoInitialState.STOPPED)
 
@@ -1546,8 +1571,10 @@ class VideoBlock(QWidget):
         self.audio.set_volume(snapshot.volume)
 
         self.seek(snapshot.current_position)
-        self.loop.set_start_time(snapshot.loop_start)
-        self.loop.set_end_time(snapshot.loop_end)
+        self.video_params.loops = list(snapshot.loops)
+        self.video_params.loop_index = snapshot.loop_index
+        self.video_params.loop_start = snapshot.loop_start
+        self.loop.announce()
         self.set_rate(snapshot.rate, is_silent=True)
 
         self.stream.switch_quality(snapshot.stream_quality)
@@ -1877,8 +1904,7 @@ class VideoBlock(QWidget):
         self.audio.set_volume(self.video_params.volume)
         self.audio.set_muted(self.video_params.is_muted)
 
-        self.loop.set_start_time(self.video_params.loop_start)
-        self.loop.set_end_time(self.video_params.loop_end)
+        self.loop.announce()
         self.set_rate(self.video_params.rate, is_silent=True)
 
         self.stream.set_reload_timer(self.video_params.auto_reload_timer_min)
@@ -2044,13 +2070,29 @@ class VideoBlock(QWidget):
                 self.loop_end_action()
                 return
 
+            # one of several loops goes on to the next, from its start
+            if self.is_loop_sequence:
+                self.loop_end_action()
+                return
+
             rest = self.loop_end - self.time
             seek_set = seek_ms - rest
             seek_set = seek_set - (seek_set // seek_stretch) * seek_stretch
 
             new_time = self.loop_start + seek_set
 
+        elif seek_ms < 0 and self.video_params.is_loop_open:
+            # the loop being made holds nothing back
+            new_time = max(0, self.time + seek_ms)
+
         elif seek_ms < 0 and self.time + seek_ms < self.loop_start:
+            if self.is_loop_sequence:
+                # back into the loop before, as far before its end
+                overshoot = self.loop_start - (self.time + seek_ms)
+                self.loop.step(-1)
+                self.seek(max(self.loop_start, self.loop_end - overshoot))
+                return
+
             seek_ms *= -1
 
             rest = self.time - self.loop_start
@@ -2097,7 +2139,11 @@ class VideoBlock(QWidget):
         were played into.
         """
 
-        if seek_ms < self.loop_start or seek_ms > self.loop_end:
+        # the viewer going to another of the loops plays that one from there
+        if is_viewers:
+            self.loop.adopt_at(seek_ms)
+
+        if seek_ms < self.loop_floor or seek_ms > self.loop_end:
             seek_ms = self.loop_start
 
         # the viewer going back into the video stays in it, whatever file

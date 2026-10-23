@@ -157,6 +157,9 @@ class VideoBlocksManager(ManagerBase):
     all_set_loop_end = pyqtSignal()
     all_loop_chapter = pyqtSignal()
     all_reset_loop = pyqtSignal()
+    all_remove_last_loop = pyqtSignal()
+    all_previous_loop = pyqtSignal()
+    all_next_loop = pyqtSignal()
     all_set_end_action = pyqtSignal(VideoEndAction)
     all_set_dir_recursive = pyqtSignal(bool)
     all_set_list_end_action = pyqtSignal(ListEndAction)
@@ -872,6 +875,9 @@ class VideoBlocksManager(ManagerBase):
             (self.all_set_loop_end, vb.loop.set_end),
             (self.all_loop_chapter, vb.chapters.loop),
             (self.all_reset_loop, vb.loop.reset),
+            (self.all_remove_last_loop, vb.loop.remove_last),
+            (self.all_previous_loop, vb.loop.previous),
+            (self.all_next_loop, vb.loop.next),
             (self.all_set_end_action, vb.set_end_action),
             (self.all_set_dir_recursive, vb.navigation.set_dir_recursive),
             (self.all_set_list_end_action, vb.navigation.set_list_end_action),

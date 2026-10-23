@@ -365,6 +365,27 @@ ACTIONS = MappingProxyType(
             "func": ("active", "loop.reset"),
             "show_if": "is_active_seekable",
         },
+        "Remove Last Loop": {
+            "title": translate("Actions", "Remove Last Loop"),
+            "key": "Ctrl+/",
+            "icon": "loop-reset",
+            "func": ("active", "loop.remove_last"),
+            "show_if": "is_active_seekable",
+        },
+        "Previous Loop": {
+            "title": translate("Actions", "Previous Loop"),
+            "key": "Ctrl+,",
+            "icon": "loop-start",
+            "func": ("active", "loop.previous"),
+            "show_if": "is_active_seekable",
+        },
+        "Next Loop": {
+            "title": translate("Actions", "Next Loop"),
+            "key": "Ctrl+.",
+            "icon": "loop-end",
+            "func": ("active", "loop.next"),
+            "show_if": "is_active_seekable",
+        },
         "Loop Chapter": {
             "title": translate("Actions", "Loop Chapter"),
             "icon": "loop-chapter",
@@ -1834,6 +1855,24 @@ ACTIONS = MappingProxyType(
             "key": "Shift+/",
             "icon": "loop-reset",
             "func": ("all", "reset_loop"),
+            "show_if": "is_any_videos_seekable",
+        },
+        "Remove Last Loop [ALL]": {
+            "title": translate("Actions", "Remove Last Loop"),
+            "icon": "loop-reset",
+            "func": ("all", "remove_last_loop"),
+            "show_if": "is_any_videos_seekable",
+        },
+        "Previous Loop [ALL]": {
+            "title": translate("Actions", "Previous Loop"),
+            "icon": "loop-start",
+            "func": ("all", "previous_loop"),
+            "show_if": "is_any_videos_seekable",
+        },
+        "Next Loop [ALL]": {
+            "title": translate("Actions", "Next Loop"),
+            "icon": "loop-end",
+            "func": ("all", "next_loop"),
             "show_if": "is_any_videos_seekable",
         },
         "Loop Chapter [ALL]": {

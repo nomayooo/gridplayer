@@ -1423,6 +1423,8 @@ class OverlayProgressBar(OverlayBar):
         self._position = 0
         self._loop_start = 0
         self._loop_end = 100
+        # the loops other than the one playing, as (start, end) fractions
+        self._other_loops = ()
         self._marks = ()
         self.progress_select_x = None
 
@@ -1511,11 +1513,21 @@ class OverlayProgressBar(OverlayBar):
         self.draw_segments(painter)
         self.draw_chapter_notches(painter)
 
+        # the loops waiting their turn under the one playing, dimmer
+        for start, end in self._other_loops:
+            if start > 0:
+                self.draw_loop_mark(painter, self.rect(), start, Qt.darkGreen)
+            if end < 1:
+                self.draw_loop_mark(painter, self.rect(), end, Qt.darkGreen)
+
+        # and the one playing, bolder when there are others to tell it from
+        width = 2 if self._other_loops else 1
+
         if self.loop_start > 0:
-            self.draw_loop_mark(painter, self.rect(), self.loop_start)
+            self.draw_loop_mark(painter, self.rect(), self.loop_start, width=width)
 
         if self.loop_end < 100:
-            self.draw_loop_mark(painter, self.rect(), self.loop_end)
+            self.draw_loop_mark(painter, self.rect(), self.loop_end, width=width)
 
     def _filled_parts(self, is_hovered):
         """What is played from the left, and under the mouse up to it."""
@@ -1539,14 +1551,14 @@ class OverlayProgressBar(OverlayBar):
             (QRect(played, 0, mouse - played, height), self.color_ahead),
         ]
 
-    def draw_loop_mark(self, painter, rect, loop_mark_percent):
+    def draw_loop_mark(self, painter, rect, loop_mark_percent, color=Qt.green, width=1):
         cur_start_loop_rect = rect.translated(0, 0)
         cur_start_loop = math.ceil(rect.width() * loop_mark_percent)
 
         cur_start_loop_rect.setX(cur_start_loop)
-        cur_start_loop_rect.setWidth(1)
+        cur_start_loop_rect.setWidth(width)
 
-        painter.fillRect(cur_start_loop_rect, Qt.green)
+        painter.fillRect(cur_start_loop_rect, color)
 
     def draw_hovered_chapter(self, painter):
         """Set the chapter under the mouse apart from the rest of the bar."""
@@ -1715,6 +1727,15 @@ class OverlayProgressBar(OverlayBar):
     @property
     def loop_end(self):
         return self._loop_end
+
+    @property
+    def other_loops(self):
+        return self._other_loops
+
+    @other_loops.setter
+    def other_loops(self, other_loops):
+        self._other_loops = tuple(other_loops)
+        self.update()
 
     @loop_end.setter
     def loop_end(self, loop_end):

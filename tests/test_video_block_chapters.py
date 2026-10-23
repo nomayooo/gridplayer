@@ -209,8 +209,7 @@ class TestLooping:
 
         block.chapters.loop()
 
-        assert block.video_params.loop_start == 10000
-        assert block.video_params.loop_end == 25000
+        assert block.video_params.loops == [(10000, 25000)]
         assert block.overlay.progress_bar.loop_start == 10000 / LENGTH
         assert block.overlay.progress_bar.loop_end == 25000 / LENGTH
 
@@ -219,8 +218,7 @@ class TestLooping:
 
         block.chapters.loop()
 
-        assert block.video_params.loop_start == 40000
-        assert block.video_params.loop_end is None
+        assert block.video_params.loops == [(40000, None)]
 
     def test_a_loop_further_on_replaces_the_one_before(self, block):
         """Its start lies past the old end, which the loop setters refuse."""
@@ -234,8 +232,7 @@ class TestLooping:
 
         block.chapters.loop()
 
-        assert block.video_params.loop_start == 25000
-        assert block.video_params.loop_end == 40000
+        assert block.video_params.loops == [(25000, 40000)]
 
     def test_chapters_outside_the_loop_are_out_of_reach(self, block):
         block.seek(12000)
