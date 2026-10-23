@@ -78,6 +78,7 @@ class LoopControl(VideoBlockPart):
         self._params.loops.append(span)
         self._params.loop_index = len(self._params.loops) - 1
         self._params.loop_start = None
+        self._params.is_outside_loops = False
 
         self.announce()
 
@@ -93,6 +94,7 @@ class LoopControl(VideoBlockPart):
         self._params.loops = []
         self._params.loop_index = 0
         self._params.loop_start = None
+        self._params.is_outside_loops = False
 
         self.announce()
 
@@ -124,10 +126,20 @@ class LoopControl(VideoBlockPart):
         self._go(-1)
 
     def _go(self, step: int):
-        if not self.step(step):
+        # from outside them, back to the one it left
+        if self._params.is_outside_loops and not self._params.is_loop_open:
+            self.rejoin()
+        elif not self.step(step):
             return
 
         self._block._loop_to_start()
+
+    def rejoin(self):
+        """Back to the loop playing, from outside every one."""
+
+        self._params.is_outside_loops = False
+
+        self.announce()
 
     def step(self, step: int) -> bool:
         """Make the loop that many on from the one playing, round the end of
@@ -146,25 +158,29 @@ class LoopControl(VideoBlockPart):
         return True
 
     def adopt_at(self, time_ms: int):
-        """Play the loop a time is in, the next one round from the one playing
-        that has it, if the one playing does not: where a viewer's seek
-        landed, which would otherwise be taken back into the loop playing."""
+        """Play the loop a time is in, the one playing if it has it, else the
+        next one round that does; outside every one, play the video as it is
+        from there. Where a viewer's seek landed, or where the video got to
+        while outside them."""
 
         params = self._params
 
-        if params.loop_start is not None or len(params.loops) < 2:
-            return
-
-        if self._is_in(params.loops[params.loop_index], time_ms):
+        if params.loop_start is not None or not params.loops:
             return
 
         count = len(params.loops)
-        for offset in range(1, count):
+        for offset in range(count):
             index = (params.loop_index + offset) % count
             if self._is_in(params.loops[index], time_ms):
-                params.loop_index = index
-                self.announce()
+                if index != params.loop_index or params.is_outside_loops:
+                    params.loop_index = index
+                    params.is_outside_loops = False
+                    self.announce()
                 return
+
+        if not params.is_outside_loops:
+            params.is_outside_loops = True
+            self.announce()
 
     def _is_in(self, span: LoopSpan, time_ms: int) -> bool:
         start, end = span
@@ -195,7 +211,9 @@ class LoopControl(VideoBlockPart):
         others = tuple(
             (self._fraction(start), 1.0 if end is None else self._fraction(end))
             for index, (start, end) in enumerate(params.loops)
-            if params.loop_start is not None or index != params.loop_index
+            if params.loop_start is not None
+            or params.is_outside_loops
+            or index != params.loop_index
         )
 
         block.loops_change.emit(others)

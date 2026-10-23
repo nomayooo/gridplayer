@@ -112,12 +112,6 @@ class TestPlayingThem:
         assert two_loops.time == 25000
         assert two_loops.video_params.loop_index == 0
 
-    def test_seeking_outside_any_loop_is_held_in_the_one_playing(self, two_loops):
-        two_loops.seek(50000)
-
-        assert two_loops.time == 5000
-        assert two_loops.video_params.loop_index == 1
-
     def test_wheeling_past_the_end_of_one_goes_on_to_the_next(self, two_loops):
         two_loops.seek(7900)
 
@@ -141,6 +135,106 @@ class TestPlayingThem:
 
         two_loops.loop.previous()
         assert (two_loops.video_params.loop_index, two_loops.time) == (1, 5000)
+
+
+class TestOutsideThem:
+    """A viewer's seek outside every loop plays the video as it is from
+    there, so that a next loop can be made anywhere."""
+
+    def test_seeking_outside_any_loop_goes_there(self, two_loops):
+        two_loops.seek(50000)
+
+        assert two_loops.time == 50000
+        assert two_loops.video_params.is_outside_loops
+        assert two_loops.video_params.current_loop is None
+
+    def test_one_loop_lets_the_video_out_too(self, block):
+        _make_loop(block, 5000, 8000)
+
+        block.seek(50000)
+        _reported(block, 50200)
+
+        assert block.time == 50200
+
+    def test_it_plays_on_without_being_taken_back(self, two_loops):
+        two_loops.seek(40000)
+
+        _reported(two_loops, 45000)
+
+        assert two_loops.time == 45000
+        assert two_loops.video_params.is_outside_loops
+
+    def test_playing_into_a_loop_plays_that_one(self, two_loops):
+        two_loops.seek(15000)
+
+        _reported(two_loops, 20100)
+
+        assert not two_loops.video_params.is_outside_loops
+        assert two_loops.video_params.loop_index == 0
+
+        _reported(two_loops, 30200)
+        assert two_loops.time == 5000
+
+    def test_seeking_into_a_loop_plays_it_as_a_loop(self, two_loops):
+        two_loops.seek(50000)
+
+        two_loops.seek(6000)
+
+        assert not two_loops.video_params.is_outside_loops
+        assert two_loops.video_params.loop_index == 1
+
+        # its end goes on to the next, as ever
+        _reported(two_loops, 8200)
+        assert (two_loops.video_params.loop_index, two_loops.time) == (0, 20000)
+
+    def test_the_end_of_the_file_goes_back_to_the_loop_left(self, two_loops):
+        two_loops.seek(50000)
+
+        two_loops.loop_end_action()
+
+        assert not two_loops.video_params.is_outside_loops
+        assert two_loops.video_params.loop_index == 1
+        assert two_loops.time == 5000
+
+    def test_wheeling_past_the_end_of_the_file_goes_back_too(self, two_loops):
+        two_loops.seek(LENGTH - 500)
+
+        two_loops.seek_shift_ms(1000)
+
+        assert two_loops.video_params.loop_index == 1
+        assert two_loops.time == 5000
+
+    def test_next_goes_back_to_the_loop_left(self, block):
+        _make_loop(block, 5000, 8000)
+        block.seek(50000)
+
+        block.loop.next()
+
+        assert not block.video_params.is_outside_loops
+        assert block.time == 5000
+
+    def test_a_loop_made_out_there_is_one_more(self, two_loops):
+        two_loops.seek(40000)
+        two_loops.loop.set_start()
+        two_loops.seek(45000)
+        two_loops.loop.set_end()
+
+        params = two_loops.video_params
+        assert params.loops == [(20000, 30000), (5000, 8000), (40000, 45000)]
+        assert not params.is_outside_loops
+        assert (two_loops.loop_start, two_loops.loop_end) == (40000, 45000)
+
+    def test_the_bar_shows_every_loop_apart(self, two_loops):
+        two_loops.seek(50000)
+
+        assert len(two_loops.overlay.progress_bar.other_loops) == 2
+
+    def test_reset_leaves_it_outside_nothing(self, two_loops):
+        two_loops.seek(50000)
+
+        two_loops.loop.reset()
+
+        assert not two_loops.video_params.is_outside_loops
 
 
 class TestTakingThemAway:
