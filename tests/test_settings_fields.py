@@ -42,6 +42,7 @@ INTERNAL_SETTINGS = {
     "player/tray_note_shown",
     "recent_list_videos",
     "recent_list_playlists",
+    "favourites",
 }
 
 SHARED_PAGES = pytest.mark.parametrize(

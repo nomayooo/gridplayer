@@ -22,7 +22,7 @@ def test_empty_window_menu_has_playlist_session_settings():
         parent=None,
     )
     names = _submenu_names(manager._menu_sections())
-    assert names == ["Sync", "Grid", "Playlist Settings", "Add"]
+    assert names == ["Sync", "Grid", "Playlist Settings", "Add", "Favourites"]
     assert "[ALL]" not in names
     assert "Snapshots" not in names
 
@@ -40,6 +40,7 @@ def test_videos_menu_puts_all_videos_above_playlist():
         "Grid",
         "Playlist Settings",
         "Add",
+        "Favourites",
     ]
 
 

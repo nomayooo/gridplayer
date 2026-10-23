@@ -2809,6 +2809,25 @@ ACTIONS = MappingProxyType(
             "enable_if": "is_any_recent_videos",
             "show_if": "is_recent_list_enabled",
         },
+        "Add to Favourites": {
+            "title": translate("Favourites", "Add to Favourites..."),
+            "icon": "favourite-add",
+            "func": "add_to_favourites",
+            "enable_if": "is_active_local_file",
+        },
+        "Manage Favourites": {
+            "title": translate("Favourites", "Manage Favourites..."),
+            "icon": "favourites",
+            "func": "manage_favourites",
+        },
+        "Favourites List": {
+            # the favourites go straight into the menu it sits in, so this
+            # title is never shown
+            "title": translate("Favourites", "Favourites"),
+            "icon": "favourites",
+            "menu_generator": "menu_generator_favourites",
+            "is_menu_inline": True,
+        },
         "Open Playlist": {
             "title": translate("Actions", "Open Playlist"),
             "key": "Ctrl+O",

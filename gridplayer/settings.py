@@ -7,6 +7,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from PyQt5.QtCore import QSettings
 
+from gridplayer.models.favourites import Favourites
 from gridplayer.models.keymap_overrides import KeymapOverrides
 from gridplayer.models.recent_list import (
     RecentList,
@@ -233,6 +234,8 @@ _default_settings = {
     "network/allow_http_in_playlists": True,
     "recent_list_videos": RecentListVideos(),
     "recent_list_playlists": RecentListPlaylists(),
+    # the favourite videos and their folders, see models.favourites
+    "favourites": Favourites(),
     # the playlist file open when the player was last closed, empty for none
     "last_playlist": "",
 }
