@@ -34,6 +34,14 @@ Build:
 just build-win-package
 ```
 
+## Windows build from GitHub
+
+To try a branch on Windows without building it yourself, run the
+`build_windows` workflow on it (Actions → build_windows → Run workflow, then
+pick the branch). In about six minutes the run's `release_dist_bin_windows_x64`
+artifact holds the installer and the portable zip. It runs no tests and
+publishes nothing; the artifact is kept for 7 days.
+
 ## Local build on MacOS
 
 Install dependencies:

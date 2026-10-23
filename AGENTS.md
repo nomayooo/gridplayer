@@ -187,6 +187,14 @@ the entry happens to exist, but never reaches translators.
   (e.g. `Transform`, `When Finished`, `Playlist Settings`). Other menu strings
   use `Actions`; other settings form strings use `SettingsDialog`.
 
+## Trying a branch on Windows
+
+When the user wants to try a change as a Windows build, push its branch and
+dispatch the `build_windows` workflow on it (`workflow_dispatch`, ref = the
+branch). Give them the run's link: the installer and portable zip are in its
+`release_dist_bin_windows_x64` artifact. It builds the 64-bit package alone,
+runs no tests and publishes nothing; it is not the prerelease.
+
 ## Changelog
 
 A pull request that changes what a user sees or does adds its own entry to

@@ -1,0 +1,19 @@
+name: build_windows
+
+# A 64-bit Windows build of any branch, to try it out before it is merged or
+# released: no tests, no other platforms, nothing published. The installer
+# and the portable zip are in the run's release_dist_bin_windows_x64
+# artifact, kept for 7 days.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      dev: true
+      windows_x64_only: true
