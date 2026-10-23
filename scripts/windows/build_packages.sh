@@ -18,15 +18,7 @@ escapeSubst() { sed 's/[&#\]/\\&/g'; }
 
 ISCC="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
 
-echo "Building installer"
-
-cp "$SCRIPT_DIR/installer.iss" "$BUILD_DIR/installer.iss"
-
-# Update installer.iss for architecture
 if [ "$BUILD_ARCH" = "win32" ]; then
-    sed -i 's/ArchitecturesAllowed=x64/ArchitecturesAllowed=x86/g' "$BUILD_DIR/installer.iss"
-    sed -i 's/ArchitecturesInstallIn64BitMode=x64/ArchitecturesInstallIn64BitMode=x86/g' "$BUILD_DIR/installer.iss"
-    sed -i 's/Flags: nowait postinstall skipifsilent 64bit/Flags: nowait postinstall skipifsilent/g' "$BUILD_DIR/installer.iss"
     INSTALLER_SUFFIX="win32-install"
     PORTABLE_SUFFIX="win32-portable"
 else
@@ -34,14 +26,28 @@ else
     PORTABLE_SUFFIX="win64-portable"
 fi
 
-APP_SRC=$(cygpath -w "$DIST_DIR/$APP_NAME" | escapeSubst)
+# BUILD_PORTABLE_ONLY: the portable zip alone, for a build to try out
+if [ -z "$BUILD_PORTABLE_ONLY" ]; then
+    echo "Building installer"
 
-replace_app_vars "$BUILD_DIR/installer.iss"
+    cp "$SCRIPT_DIR/installer.iss" "$BUILD_DIR/installer.iss"
 
-sed -i "s#{APP_SRC}#$APP_SRC#g" "$BUILD_DIR/installer.iss"
-PYTHONPATH="$ROOT_DIR" python "$SCRIPT_DIR/generate_file_associations.py" "{APP_FILE_ASSOCIATIONS}" "$BUILD_DIR/installer.iss"
+    # Update installer.iss for architecture
+    if [ "$BUILD_ARCH" = "win32" ]; then
+        sed -i 's/ArchitecturesAllowed=x64/ArchitecturesAllowed=x86/g' "$BUILD_DIR/installer.iss"
+        sed -i 's/ArchitecturesInstallIn64BitMode=x64/ArchitecturesInstallIn64BitMode=x86/g' "$BUILD_DIR/installer.iss"
+        sed -i 's/Flags: nowait postinstall skipifsilent 64bit/Flags: nowait postinstall skipifsilent/g' "$BUILD_DIR/installer.iss"
+    fi
 
-"$ISCC" //O"dist" //F"$APP_NAME-$APP_FILE_VERSION-$INSTALLER_SUFFIX" "$BUILD_DIR/installer.iss"
+    APP_SRC=$(cygpath -w "$DIST_DIR/$APP_NAME" | escapeSubst)
+
+    replace_app_vars "$BUILD_DIR/installer.iss"
+
+    sed -i "s#{APP_SRC}#$APP_SRC#g" "$BUILD_DIR/installer.iss"
+    PYTHONPATH="$ROOT_DIR" python "$SCRIPT_DIR/generate_file_associations.py" "{APP_FILE_ASSOCIATIONS}" "$BUILD_DIR/installer.iss"
+
+    "$ISCC" //O"dist" //F"$APP_NAME-$APP_FILE_VERSION-$INSTALLER_SUFFIX" "$BUILD_DIR/installer.iss"
+fi
 
 echo "Building portable zip"
 
