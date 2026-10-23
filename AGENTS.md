@@ -187,6 +187,16 @@ the entry happens to exist, but never reaches translators.
   (e.g. `Transform`, `When Finished`, `Playlist Settings`). Other menu strings
   use `Actions`; other settings form strings use `SettingsDialog`.
 
+## Changelog
+
+A pull request that changes what a user sees or does adds its own entry to
+`CHANGELOG.md`, under `## [Unreleased]`, at the top of `Added`, `Changed` or
+`Fixed`, linking the pull request (`([#N](https://github.com/nomayooo/gridplayer/pull/N))`),
+not a commit. Open the pull request first to know its number, then push the
+entry. Tests, refactors, build changes and reverts need none; a fix to an
+unreleased feature goes into that feature's entry. Never bump the version or
+tag a release unless asked.
+
 ## Code style
 
 * Follow the Ruff configuration in `pyproject.toml`.

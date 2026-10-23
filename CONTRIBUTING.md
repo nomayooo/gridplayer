@@ -72,9 +72,24 @@ Build:
 just build-linux-appimage
 ```
 
+## Changelog
+
+A pull request that changes what a user sees or does adds its entry to
+`CHANGELOG.md` itself, under `## [Unreleased]`, in the section it belongs to
+(`Added`, `Changed` or `Fixed`), at the top. Use [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format,
+and link the pull request rather than a commit, since a commit's hash can
+change when it is merged:
+
+```markdown
+- Add multiple A-B loops, played one after another ([#2](https://github.com/nomayooo/gridplayer/pull/2))
+```
+
+Tests, refactors, build changes and reverts need no entry. A fix to something
+not released yet goes into that feature's entry, not one of its own.
+
 ## Release
 
-1. State changes in `CHANGELOG.md` inside `## [Unreleased]` section. Use [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
+1. Check that every change is listed under `## [Unreleased]` in `CHANGELOG.md`. Pull requests add their own entries (see Changelog above).
 
 As a guide, print changes from recent commits:
 
