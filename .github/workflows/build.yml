@@ -7,6 +7,10 @@ on:
         description: 'Build a dev snapshot: stamp a .dev.<short sha> version into the app and name the files "dev"'
         type: boolean
         default: false
+      windows_x64_only:
+        description: 'Build the 64-bit Windows package alone, to try a branch out'
+        type: boolean
+        default: false
     outputs:
       version:
         description: 'Version the app was built with'
@@ -76,6 +80,7 @@ jobs:
 
   build_mac:
     needs: build_python
+    if: ${{ !inputs.windows_x64_only }}
     strategy:
       matrix:
         include:
@@ -128,7 +133,7 @@ jobs:
     needs: build_python
     strategy:
       matrix:
-        arch: [ x86, x64 ]
+        arch: ${{ fromJSON(inputs.windows_x64_only && '["x64"]' || '["x86", "x64"]') }}
     runs-on: windows-latest
     defaults:
       run:
@@ -181,6 +186,7 @@ jobs:
 
   build_appimage:
     needs: build_python
+    if: ${{ !inputs.windows_x64_only }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
