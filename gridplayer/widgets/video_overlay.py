@@ -119,6 +119,9 @@ class OverlayBlock(QWidget):
     # which item of its list the cell plays clicked, for the List window
     list_place_clicked = pyqtSignal()
 
+    # the picture at the time under the mouse on the seek bar wanted
+    preview_wanted = pyqtSignal(int)
+
     # the actions of a cell still loading, or failed
     stop_clicked = pyqtSignal()
     retry_clicked = pyqtSignal()
@@ -182,6 +185,7 @@ class OverlayBlock(QWidget):
         qt_connect(
             (self.progress_bar.mouse_over, self.floating_progress.on_mouse_over),
             (self.progress_bar.mouse_left, self.floating_progress.on_mouse_left),
+            (self.floating_progress.preview_wanted, self.preview_wanted),
             (self.bookmark_markers.marker_over, self.floating_progress.on_marker_over),
             (self.bookmark_markers.marker_left, self.floating_progress.on_mouse_left),
             (self.bookmark_markers.marker_clicked, self.bookmark_clicked),
@@ -436,6 +440,11 @@ class OverlayBlock(QWidget):
     @pyqtSlot(tuple)
     def set_other_loops(self, loops):
         self.progress_bar.other_loops = loops
+
+    def set_preview(self, preview):
+        """The picture at the time under the mouse on the seek bar."""
+
+        self.floating_progress.set_preview(preview)
 
     @pyqtSlot(tuple)
     def set_seek_marks(self, marks):

@@ -7,7 +7,7 @@ as it was the last time it was painted there.
 
 import pytest
 from PyQt5.QtCore import QPoint, QRect, Qt
-from PyQt5.QtGui import QRegion
+from PyQt5.QtGui import QImage, QRegion
 from PyQt5.QtWidgets import QApplication, QWidget
 
 from gridplayer.widgets.video_overlay import OverlayBlockFloating
@@ -74,6 +74,21 @@ class TestComingBack:
 
 
 class TestTheHoverLabel:
+    def test_with_a_picture_the_shape_takes_it_in(self, overlay):
+        label = _hover(overlay, 0.5)
+        bare_height = label.height()
+
+        picture = QImage(320, 180, QImage.Format_RGB32)
+        picture.fill(Qt.blue)
+        overlay.set_preview(picture)
+
+        assert label.height() > bare_height
+
+        box = label.geometry().adjusted(0, 0, 0, -10)
+
+        assert _covers(overlay.mask(), box)
+        assert overlay.mask().contains(_pointer_tip(label))
+
     def test_it_is_in_the_shape_before_it_paints(self, overlay):
         label = _hover(overlay, 0.5)
 

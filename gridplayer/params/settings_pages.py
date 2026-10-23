@@ -206,6 +206,7 @@ PAGES = (
                 "player/start_fullscreen",
                 "player/inhibit_screensaver",
                 "player/media_keys_background",
+                "player/seek_preview",
             ),
             Section(
                 tray_text(

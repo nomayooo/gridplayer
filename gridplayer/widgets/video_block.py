@@ -85,6 +85,7 @@ from gridplayer.widgets.video_block_guards import (
 )
 from gridplayer.widgets.video_block_loop import LoopControl
 from gridplayer.widgets.video_block_navigation import NavigationControl
+from gridplayer.widgets.video_block_preview import PreviewControl
 from gridplayer.widgets.video_block_recovery import RecoveryControl
 from gridplayer.widgets.video_block_screenshot import ScreenshotControl
 from gridplayer.widgets.video_block_sponsorblock import SponsorBlockControl
@@ -256,6 +257,7 @@ class VideoBlock(QWidget):
         self.recovery = RecoveryControl(self)
         self.stream = StreamControl(self)
         self.navigation = NavigationControl(self)
+        self.preview = PreviewControl(self)
 
         self.url_resolver = self.init_url_resolver()
 
@@ -451,6 +453,7 @@ class VideoBlock(QWidget):
             (overlay.stop_clicked, self.stop_playback),
             (overlay.retry_clicked, self.reload),
             (overlay.next_clicked, self.recovery.skip_now),
+            (overlay.preview_wanted, self.preview.want),
             (overlay.details_clicked, self.status.show_error_details),
             (self.time_change, overlay.set_position),
             (self.volume_change, overlay.set_volume_position),
@@ -1936,6 +1939,7 @@ class VideoBlock(QWidget):
 
         self.chapters.update()
         self.sponsorblock.update()
+        self.preview.warm_up()
 
         self.is_audio_present_change.emit(bool(self.audio.tracks))
 

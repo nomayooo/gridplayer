@@ -57,6 +57,7 @@ def _block_parts():
     from gridplayer.widgets.video_block_chapters import ChapterControl
     from gridplayer.widgets.video_block_loop import LoopControl
     from gridplayer.widgets.video_block_navigation import NavigationControl
+    from gridplayer.widgets.video_block_preview import PreviewControl
     from gridplayer.widgets.video_block_recovery import RecoveryControl
     from gridplayer.widgets.video_block_screenshot import ScreenshotControl
     from gridplayer.widgets.video_block_sponsorblock import SponsorBlockControl
@@ -71,6 +72,7 @@ def _block_parts():
         "chapters": ChapterControl,
         "loop": LoopControl,
         "navigation": NavigationControl,
+        "preview": PreviewControl,
         "recovery": RecoveryControl,
         "screenshot": ScreenshotControl,
         "sponsorblock": SponsorBlockControl,
