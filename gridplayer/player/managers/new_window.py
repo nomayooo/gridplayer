@@ -41,6 +41,7 @@ class NewWindowManager(ManagerBase):
         return {
             "toggle_cell_selected": self.cmd_toggle_cell_selected,
             "select_cell_range": self.cmd_select_cell_range,
+            "add_cell_range": self.cmd_add_cell_range,
             "clear_cell_selection": self.cmd_clear_cell_selection,
             "is_active_cell_selected": self.is_active_cell_selected,
             "is_any_cells_selected": self.is_any_cells_selected,
@@ -66,6 +67,12 @@ class NewWindowManager(ManagerBase):
 
         self._anchor = block.id
 
+    def cmd_add_cell_range(self):
+        """The cells from the one picked last up to the active one picked out
+        as well, the others picked kept (Ctrl+Shift+Click)."""
+
+        self._pick_range(is_kept=True)
+
     def cmd_select_cell_range(self):
         """The cells from the one picked last up to the active one, in the
         grid's order, the ones picked out, and no others: as a file manager
@@ -73,6 +80,9 @@ class NewWindowManager(ManagerBase):
         where it is clicked. With none picked yet, the active one alone, the
         range starting from it."""
 
+        self._pick_range(is_kept=False)
+
+    def _pick_range(self, is_kept: bool):
         block = self._ctx.active_block
 
         if block is None:
@@ -89,10 +99,15 @@ class NewWindowManager(ManagerBase):
         first, last = sorted((ids.index(self._anchor), ids.index(block.id)))
         in_range = in_grid[first : last + 1]
 
-        for each in in_grid:
-            each.is_selected = each in in_range
+        if not is_kept:
+            for each in in_grid:
+                each.is_selected = False
+            self._selected = []
 
-        self._selected = [each.id for each in in_range]
+        for each in in_range:
+            each.is_selected = True
+            if each.id not in self._selected:
+                self._selected.append(each.id)
 
     def cmd_clear_cell_selection(self):
         for block in self._selected_blocks():

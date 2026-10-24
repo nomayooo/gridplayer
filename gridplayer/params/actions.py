@@ -1557,6 +1557,13 @@ ACTIONS = MappingProxyType(
             "func": "select_cell_range",
             "show_if": "is_any_cells_selected",
         },
+        "Add Up to Here to Selection": {
+            "title": translate("Actions", "Add Up to Here to Selection"),
+            "keys": ["Ctrl+Shift+Click"],
+            "icon": "checkmark",
+            "func": "add_cell_range",
+            "show_if": "is_any_cells_selected",
+        },
         "Clear Selection": {
             "title": translate("Actions", "Clear Selection"),
             "icon": "cross",
