@@ -214,6 +214,7 @@ class FavouritesManager(ManagerBase):
         # name of its own: "A", "A (2)", "A (3)", in the grid's order; the
         # same names again the next time, to be replaced as any are
         copies: dict = {}
+        made = []
 
         for block in files:
             path = block.video_params.uri
@@ -223,7 +224,9 @@ class FavouritesManager(ManagerBase):
             if copies[path] > 1:
                 name = f"{_name_of(block)} ({copies[path]})"
 
-            favourites.put_video(folder, _favourite_of(block, name))
+            made.append(_favourite_of(block, name))
+
+        favourites.put_videos(folder, made)
 
         self._save(favourites)
 

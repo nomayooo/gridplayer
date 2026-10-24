@@ -153,6 +153,17 @@ class TestTheModel:
 
         assert [i.path for i in favourites.root] == [HERE, NEW]
 
+    def test_several_into_a_folder_below_ones_they_take_the_place_of(self):
+        # the folder after the two it takes in: each taken out moves it up
+        favourites = Favourites(
+            [_video("a"), _video("b", path=NEW), FavouriteFolder(name="New")]
+        )
+
+        favourites.put_videos((2,), [_video("a"), _video("b", path=NEW)])
+
+        assert [i.name for i in favourites.root] == ["New"]
+        assert [i.name for i in favourites.items_at((0,))] == ["a", "b"]
+
     def test_the_names_a_file_is_kept_under(self):
         assert _favourites().names_of(HERE) == {"Top", "Song", "Gig"}
         assert _favourites().names_of(NEW) == set()
@@ -631,6 +642,24 @@ class TestMakingAll:
             ("A (2)", 105_000),
             ("A (3)", 180_000),
         ]
+
+    def test_into_a_folder_made_below_them(self, stored, monkeypatch):
+        # already favourites at the top, the folder made in the window after
+        def ask(**kwargs):
+            favourites = kwargs["favourites"]
+            favourites.root.append(FavouriteFolder(name="Made"))
+            return favourites, (len(favourites.root) - 1,)
+
+        stored["favourites"] = Favourites(
+            [_video("A", path=NEW), _video("A (2)", path=NEW)]
+        )
+        monkeypatch.setattr(manager_module.AddAllFavouritesDialog, "ask", ask)
+
+        _grid_of(_block(title="A"), _block(title="A")).cmd_add_all_to_favourites()
+
+        favourites = stored["favourites"]
+        assert [i.name for i in favourites.root] == ["Made"]
+        assert [i.name for i in favourites.items_at((0,))] == ["A", "A (2)"]
 
     def test_copies_added_again_replace_their_own(self, stored, monkeypatch):
         stored["favourites"] = Favourites()
