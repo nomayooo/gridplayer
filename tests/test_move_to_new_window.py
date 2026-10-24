@@ -190,7 +190,7 @@ def started(monkeypatch):
 
     def start_detached(program, args):
         calls.append((program, args))
-        return True, 1
+        return True
 
     monkeypatch.setattr(new_window.QProcess, "startDetached", start_detached)
 
@@ -250,7 +250,7 @@ class TestMovingOut:
 
         def start_detached(program, args):
             tried.append(Path(args[args.index(MOVED_CELLS_ARG) + 1]))
-            return False, 0
+            return False
 
         monkeypatch.setattr(new_window.QProcess, "startDetached", start_detached)
         _select(manager, blocks[0])
@@ -261,6 +261,23 @@ class TestMovingOut:
         assert blocks[0].is_selected
         assert len(manager.errors) == 1
         assert not tried[0].exists()
+
+    def test_started_for_real(self, manager, blocks, monkeypatch, tmp_path):
+        # the real QProcess.startDetached, with a program that does nothing
+        # but take the file away: what it gives back is what is believed
+        script = tmp_path / "take.py"
+        script.write_text("import os, sys; os.remove(sys.argv[-1])")
+        monkeypatch.setattr(
+            new_window,
+            "new_window_command",
+            lambda path: (sys.executable, [str(script), str(path)]),
+        )
+        _select(manager, blocks[0])
+
+        manager.cmd_move_to_new_window()
+
+        assert manager.errors == []
+        blocks[0].close.assert_called_once_with()
 
     def test_nothing_with_no_cell(self, manager, started):
         manager._ctx.active_block = None

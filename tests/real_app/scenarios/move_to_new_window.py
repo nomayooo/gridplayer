@@ -50,7 +50,7 @@ def scenario(d):
 
     def start_detached(program, args):
         started.append((program, args))
-        return True, 1
+        return True
 
     new_window.QProcess.startDetached = start_detached
 

@@ -117,7 +117,7 @@ class NewWindowManager(ManagerBase):
 
         program, args = new_window_command(moved_file)
 
-        is_started, _ = QProcess.startDetached(program, args)
+        is_started = QProcess.startDetached(program, args)
 
         if not is_started:
             self._log.error(f"Couldn't start a new window: {program} {args}")
