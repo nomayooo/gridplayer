@@ -749,6 +749,10 @@ class VideoBlock(QWidget):
     def showEvent(self, event):
         if not self._ctx.is_overlay_hide_on_timeout:
             self.show_overlay()
+        elif self._is_selected:
+            # back from being minimized, or from behind another in single
+            # mode: hideEvent took its overlay away, the mark with it
+            self._show_mark_only()
 
     def customEvent(self, event):
         if event.type() == OVERLAY_ACTIVITY_EVENT:

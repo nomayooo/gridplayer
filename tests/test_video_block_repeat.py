@@ -229,6 +229,26 @@ def test_a_cell_let_go_while_faded_fades_out_whole(mocker):
     assert not block._is_overlay_faded
 
 
+def test_a_selected_cell_shown_again_is_marked_again(mocker):
+    """Back from being minimized: its overlay, taken away as it was hidden,
+    back with the mark alone."""
+
+    block = _overlay_block(mocker, is_selected=True)
+
+    VideoBlock.showEvent(block, None)
+
+    block.overlay.show.assert_called_once()
+    block.overlay.set_is_chrome_visible.assert_called_once_with(False)
+
+
+def test_a_cell_not_selected_shown_again_waits_for_the_mouse(mocker):
+    block = _overlay_block(mocker, is_selected=False)
+
+    VideoBlock.showEvent(block, None)
+
+    block.overlay.show.assert_not_called()
+
+
 def test_stop_playback_destroys_driver(mocker):
     block = mocker.Mock()
     block.video_params = Video(uri="http://example.com/a.mp4")
