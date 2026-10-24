@@ -63,11 +63,14 @@ def scenario(d):
     d.check("a loop begun", loop_start is not None, loop_start)
 
     # the same file again: offered as the favourite it is, which it replaces
+    # under the same name; under another it would be one more
     def name_begun(window):
         d.check("offered with the loop begun", not window.loop_start_note.isHidden())
         d.check("as the one kept", not window.kept_note.isHidden())
         d.check("under its name", window.name.text() == "My clip", window.name.text())
         window.name.setText("Begun")
+        d.check("renamed, one more", window.kept_note.isHidden())
+        window.name.setText("My clip")
         window.accept()
 
     d.through_modal(lambda: d.act(a, "Add to Favourites"), "add begun", name_begun)
@@ -81,7 +84,7 @@ def scenario(d):
         begun.model_dump(mode="json"),
     )
 
-    d.choose(a, "menu_generator_favourites", "Begun")
+    d.choose(a, "menu_generator_favourites", "My clip")
     d.wait_until(lambda: len(d.cells) == 3, "a third cell")
     c = d.cells[2]
     d.wait_until(lambda: c.is_playable, "the begun favourite plays")

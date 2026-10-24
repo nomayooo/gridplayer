@@ -156,7 +156,7 @@ class FavouritesManager(ManagerBase):
 
         # a favourite already: offered as it is, to be replaced
         kept = favourites.find_video(params.uri)
-        folder, name = ((), block.title or Path(params.uri).stem)
+        folder, name = ((), _name_of(block))
         if kept is not None:
             folder, name = kept[0], kept[1].name
 
@@ -168,7 +168,7 @@ class FavouritesManager(ManagerBase):
             loop_start=params.loop_start,
             position=params.current_position,
             folder=folder,
-            is_kept=kept is not None,
+            kept_names=frozenset(favourites.names_of(params.uri)),
         )
 
         if added is None:
@@ -210,8 +210,20 @@ class FavouritesManager(ManagerBase):
 
         favourites, folder = added
 
+        # copies of one file, at different places in it, each kept under a
+        # name of its own: "A", "A (2)", "A (3)", in the grid's order; the
+        # same names again the next time, to be replaced as any are
+        copies: dict = {}
+
         for block in files:
-            favourites.put_video(folder, _favourite_of(block))
+            path = block.video_params.uri
+            copies[path] = copies.get(path, 0) + 1
+
+            name = None
+            if copies[path] > 1:
+                name = f"{_name_of(block)} ({copies[path]})"
+
+            favourites.put_video(folder, _favourite_of(block, name))
 
         self._save(favourites)
 
@@ -224,6 +236,13 @@ class FavouritesManager(ManagerBase):
             self._save(edited)
 
 
+def _name_of(block) -> str:
+    """The name a cell's video is a favourite under, unless given another:
+    the one the cell shows, else the file's."""
+
+    return block.title or Path(block.video_params.uri).stem
+
+
 def _favourite_of(block, name: str | None = None) -> FavouriteVideo:
     """The video a cell plays, as a favourite: its file, its loops, where
     it is in it, under the name given, else the one the cell shows, else
@@ -232,7 +251,7 @@ def _favourite_of(block, name: str | None = None) -> FavouriteVideo:
     params = block.video_params
 
     return FavouriteVideo(
-        name=name or block.title or Path(params.uri).stem,
+        name=name or _name_of(block),
         path=params.uri,
         loops=list(params.loops),
         loop_start=params.loop_start,

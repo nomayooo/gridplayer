@@ -91,10 +91,22 @@ class Favourites(RootModel[list[FavouriteItem]]):
 
         return None
 
+    def names_of(self, path: Path) -> set[str]:
+        """The names a file is a favourite under, in any folder."""
+
+        return {
+            item.name
+            for folder, _ in self.folders()
+            for item in self.items_at(folder)
+            if isinstance(item, FavouriteVideo) and item.path == path
+        }
+
     def put_video(self, folder: FolderPath, video: FavouriteVideo) -> None:
-        """A favourite of a file put in a folder, in place of the one the
-        file had: where that one was when it was in the folder, else at the
-        end of it, the old one gone. A file is a favourite once."""
+        """A favourite of a file put in a folder, in place of the one of the
+        file under the same name: where that one was when it was in the
+        folder, else at the end of it, the old one gone. A file is a
+        favourite once under each name, so that copies of it, at different
+        places in it, are kept apart by theirs."""
 
         # the folder's own list, taken before any is taken out of it or
         # before it: a folder is known by where it is, which that changes
@@ -108,7 +120,10 @@ class Favourites(RootModel[list[FavouriteItem]]):
             for index in reversed(range(len(items))):
                 item = items[index]
 
-                if not isinstance(item, FavouriteVideo) or item.path != video.path:
+                if not isinstance(item, FavouriteVideo) or (item.path, item.name) != (
+                    video.path,
+                    video.name,
+                ):
                     continue
 
                 if items is target and not is_replaced:

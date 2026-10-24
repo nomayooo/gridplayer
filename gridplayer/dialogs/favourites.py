@@ -132,7 +132,7 @@ class AddFavouriteDialog(_InFolderDialog):
         loops: int,
         loop_start: int | None = None,
         folder: FolderPath = (),
-        is_kept: bool = False,
+        kept_names: frozenset[str] = frozenset(),
         position: int | None = None,
         **kwargs,
     ):
@@ -172,16 +172,15 @@ class AddFavouriteDialog(_InFolderDialog):
                 )
             )
 
-        # a favourite already, which this one takes the place of
+        # a favourite already under the name, which this one takes the place
+        # of; under another name, one more
         self.kept_note = QLabel(
             translate("Favourites", "Already in your favourites: this replaces it."),
             self,
         )
-        self.kept_note.setVisible(is_kept)
+        self._kept_names = kept_names
 
-        self.name.textChanged.connect(
-            lambda text: self.ok_button.setEnabled(bool(text.strip()))
-        )
+        self.name.textChanged.connect(self._name_changed)
 
         form = QFormLayout()
         form.addRow(translate("Favourites", "Name:"), self.name)
@@ -197,6 +196,12 @@ class AddFavouriteDialog(_InFolderDialog):
 
         self.fill_folders(selected=folder)
 
+        self._name_changed(name)
+
+    def _name_changed(self, text: str):
+        self.ok_button.setEnabled(bool(text.strip()))
+        self.kept_note.setVisible(text.strip() in self._kept_names)
+
     @classmethod
     def ask(
         cls,
@@ -206,7 +211,7 @@ class AddFavouriteDialog(_InFolderDialog):
         loops: int,
         loop_start: int | None = None,
         folder: FolderPath = (),
-        is_kept: bool = False,
+        kept_names: frozenset[str] = frozenset(),
         position: int | None = None,
     ):
         """(the favourites with any folders made, the folder picked, the
@@ -218,7 +223,7 @@ class AddFavouriteDialog(_InFolderDialog):
             loops=loops,
             loop_start=loop_start,
             folder=folder,
-            is_kept=is_kept,
+            kept_names=kept_names,
             position=position,
             parent=parent,
         )
