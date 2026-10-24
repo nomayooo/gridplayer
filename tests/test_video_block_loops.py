@@ -88,6 +88,39 @@ class TestMakingThem:
         assert block.video_params.loops == [(5000, 9000), (7000, 12000)]
 
 
+class TestOneKeyForBoth:
+    def test_begins_one_then_finishes_it(self, block):
+        block.seek(5000)
+        block.loop.set_start_or_end()
+
+        assert block.video_params.loop_start == 5000
+        assert block.video_params.loops == []
+
+        block.seek(8000)
+        block.loop.set_start_or_end()
+
+        assert block.video_params.loops == [(5000, 8000)]
+        assert block.video_params.loop_start is None
+
+    def test_after_one_made_begins_another(self, block):
+        _make_loop(block, 5000, 8000)
+
+        block.seek(20000)
+        block.loop.set_start_or_end()
+
+        assert block.video_params.loop_start == 20000
+        assert block.video_params.loops == [(5000, 8000)]
+
+    def test_back_before_the_start_begins_it_there_instead(self, block):
+        block.seek(9000)
+        block.loop.set_start_or_end()
+        block.seek(4000)
+        block.loop.set_start_or_end()
+
+        assert block.video_params.loop_start == 4000
+        assert block.video_params.loops == []
+
+
 class TestPlayingThem:
     def test_the_end_of_one_goes_on_to_the_next_round_to_the_first(self, two_loops):
         # the last made is playing, the end of which goes round to the first

@@ -155,6 +155,7 @@ class VideoBlocksManager(ManagerBase):
     all_set_loop_random = pyqtSignal(bool)
     all_set_loop_start = pyqtSignal()
     all_set_loop_end = pyqtSignal()
+    all_set_loop_start_or_end = pyqtSignal()
     all_loop_chapter = pyqtSignal()
     all_reset_loop = pyqtSignal()
     all_remove_last_loop = pyqtSignal()
@@ -873,6 +874,7 @@ class VideoBlocksManager(ManagerBase):
             (self.all_set_loop_random, vb.loop.set_random),
             (self.all_set_loop_start, vb.loop.set_start),
             (self.all_set_loop_end, vb.loop.set_end),
+            (self.all_set_loop_start_or_end, vb.loop.set_start_or_end),
             (self.all_loop_chapter, vb.chapters.loop),
             (self.all_reset_loop, vb.loop.reset),
             (self.all_remove_last_loop, vb.loop.remove_last),
