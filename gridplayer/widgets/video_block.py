@@ -191,6 +191,9 @@ class VideoBlock(QWidget):
         self._is_active = False
         # picked out with others, to be moved to a new window with them
         self._is_selected = False
+        # the controls faded out on their timeout, the overlay kept for the
+        # selection mark alone
+        self._is_overlay_faded = False
         self._is_closing = False
         self._drop_indicator = DropIndicator.NONE
 
@@ -823,6 +826,13 @@ class VideoBlock(QWidget):
         self._is_selected = is_selected
         self.is_selected_change.emit(is_selected)
 
+        # the mark shown while the controls are faded out too, and gone
+        # with them once it is let go
+        if is_selected and not self.overlay.isVisible():
+            self._show_mark_only()
+        elif not is_selected and self._is_overlay_faded:
+            self._fade_overlay()
+
     def refresh_overlay_border(self):
         self.is_active_change.emit(self.is_active_shown)
         self._update_chrome()
@@ -1189,7 +1199,7 @@ class VideoBlock(QWidget):
             return
         if self._ctx.is_overlay_hide_on_timeout:
             self.overlay_hide_timer.stop()
-            self.overlay.hide()
+            self._fade_overlay()
             return
         self.show_overlay()
 
@@ -1236,9 +1246,41 @@ class VideoBlock(QWidget):
         if not self.is_overlay_fits:
             return
 
+        if self._is_overlay_faded:
+            self._is_overlay_faded = False
+            self.overlay.set_is_chrome_visible(True)
+
         self.overlay.show()
         if self._ctx.is_overlay_hide_on_timeout:
             self.overlay_hide_timer.start(1000 * self._ctx.overlay_timeout)
+
+    def _fade_overlay(self):
+        """The controls out of sight, as their timeout has it; a selected
+        cell's overlay kept, with its selection mark alone, for what is
+        picked to stay marked while the mouse is elsewhere."""
+
+        if self._is_selected:
+            self._show_mark_only()
+            return
+
+        self.overlay.hide()
+
+        if self._is_overlay_faded:
+            self._is_overlay_faded = False
+            self.overlay.set_is_chrome_visible(True)
+
+    def _show_mark_only(self):
+        if (
+            self._ctx.is_drag_ui
+            or self._ctx.is_disable_overlay
+            or not self.isVisible()
+            or not self.is_overlay_fits
+        ):
+            return
+
+        self._is_overlay_faded = True
+        self.overlay.set_is_chrome_visible(False)
+        self.overlay.show()
 
     def hide_overlay(self):
         if self._ctx.is_drag_ui:
@@ -1260,7 +1302,7 @@ class VideoBlock(QWidget):
         if not self._ctx.is_overlay_hide_on_timeout:
             return
 
-        self.overlay.hide()
+        self._fade_overlay()
 
     @only_initialized
     def time_changed(self, new_time):
