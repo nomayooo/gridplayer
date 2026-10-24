@@ -11,10 +11,14 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
 
 import pytest
-from PyQt5.QtWidgets import QWidget
+from PyQt5.QtWidgets import QMessageBox, QWidget
 
 from gridplayer.dialogs import favourites as dialogs
-from gridplayer.dialogs.favourites import AddFavouriteDialog, ManageFavouritesDialog
+from gridplayer.dialogs.favourites import (
+    AddAllFavouritesDialog,
+    AddFavouriteDialog,
+    ManageFavouritesDialog,
+)
 from gridplayer.models.favourites import (
     FavouriteFolder,
     Favourites,
@@ -31,9 +35,13 @@ NEW = HERE.parent / "conftest.py"
 GONE = HERE.parent / "no such video.mp4"
 
 
-def _video(name="Clip", path=HERE, loops=(), loop_start=None):
+def _video(name="Clip", path=HERE, loops=(), loop_start=None, position=None):
     return FavouriteVideo(
-        name=name, path=path, loops=list(loops), loop_start=loop_start
+        name=name,
+        path=path,
+        loops=list(loops),
+        loop_start=loop_start,
+        position=position,
     )
 
 
@@ -72,6 +80,8 @@ class TestTheModel:
         )
 
         assert read.root[0].loop_start is None
+        assert read.root[0].position is None
+        assert (read.root[0].loop_index, read.root[0].is_outside_loops) == (0, False)
 
     def test_a_folder_by_where_it_is(self):
         favourites = _favourites()
@@ -269,6 +279,36 @@ class TestIntoTheGrid:
         assert video.loop_start == 5000
         assert video.current_position == 5000
 
+    def test_at_where_it_was_kept_at(self, adder):
+        adder.add_favourite_videos(
+            [
+                _video(
+                    loops=[(1000, 2000), (5000, 6000)],
+                    loop_start=9000,
+                    position=5500,
+                ),
+                FavouriteVideo(
+                    name="Outside",
+                    path=HERE,
+                    loops=[(1000, 2000), (5000, 6000)],
+                    position=3000,
+                    loop_index=1,
+                    is_outside_loops=True,
+                ),
+            ]
+        )
+
+        ((begun, outside),) = adder.added
+        assert begun.current_position == 5500
+        assert (outside.current_position, outside.loop_index) == (3000, 1)
+        assert outside.is_outside_loops
+
+    def test_one_kept_before_positions_were_opens_as_before(self, adder):
+        adder.add_favourite_videos([_video()])
+
+        ((video,),) = adder.added
+        assert video.current_position == 0
+
     def test_a_file_gone_is_said_and_the_rest_opened(self, adder):
         adder.add_favourite_videos([_video(path=GONE), _video()])
 
@@ -283,11 +323,26 @@ class TestIntoTheGrid:
         adder._ctx.commands.add_recent_uris.assert_not_called()
 
 
-def _block(uri=NEW, title="Shown title", loops=(), loop_start=None):
+def _block(
+    uri=NEW,
+    title="Shown title",
+    loops=(),
+    loop_start=None,
+    position=0,
+    loop_index=0,
+    is_outside_loops=False,
+):
     return SimpleNamespace(
         is_local_file=isinstance(uri, Path),
         title=title,
-        video_params=SimpleNamespace(uri=uri, loops=list(loops), loop_start=loop_start),
+        video_params=SimpleNamespace(
+            uri=uri,
+            loops=list(loops),
+            loop_start=loop_start,
+            current_position=position,
+            loop_index=loop_index,
+            is_outside_loops=is_outside_loops,
+        ),
     )
 
 
@@ -303,7 +358,9 @@ class TestMakingOne:
         assert asked.call_args.kwargs["name"] == "Shown title"
         assert asked.call_args.kwargs["loops"] == 1
         added = stored["favourites"].items_at((1, 1))[-1]
-        assert added == FavouriteVideo(name="My clip", path=NEW, loops=[(500, 900)])
+        assert added == FavouriteVideo(
+            name="My clip", path=NEW, loops=[(500, 900)], position=0
+        )
 
     def test_a_loop_begun_and_not_finished_kept_too(self, stored, monkeypatch):
         asked = Mock(return_value=(stored["favourites"], (), "Begun"))
@@ -315,6 +372,23 @@ class TestMakingOne:
         assert asked.call_args.kwargs["loop_start"] == 12_000
         added = stored["favourites"].root[-1]
         assert (added.loops, added.loop_start) == ([], 12_000)
+
+    def test_where_it_is_kept_with_it(self, stored, monkeypatch):
+        asked = Mock(return_value=(stored["favourites"], (), "Here"))
+        monkeypatch.setattr(manager_module.AddFavouriteDialog, "ask", asked)
+        block = _block(
+            loops=[(1, 2), (5, 9)], position=83_456, loop_index=1, is_outside_loops=True
+        )
+
+        _manager(active=block).cmd_add_to_favourites()
+
+        assert asked.call_args.kwargs["position"] == 83_456
+        added = stored["favourites"].root[-1]
+        assert (added.position, added.loop_index, added.is_outside_loops) == (
+            83_456,
+            1,
+            True,
+        )
 
     def test_named_after_the_file_without_a_title(self, stored, monkeypatch):
         asked = Mock(return_value=None)
@@ -370,7 +444,7 @@ class TestMakingOne:
         _manager(active=_block(loops=[(1, 2)])).cmd_add_to_favourites()
 
         assert stored["favourites"].items_at((1,)) == [
-            FavouriteVideo(name="New name", path=NEW, loops=[(1, 2)])
+            FavouriteVideo(name="New name", path=NEW, loops=[(1, 2)], position=0)
         ]
 
     def test_nothing_kept_when_thought_better_of(self, stored, monkeypatch):
@@ -413,10 +487,134 @@ class TestMakingOne:
         assert stored["favourites"] is before
 
 
+def _answered(monkeypatch, answer):
+    """Each "are you sure?" answered so, and what it asked kept."""
+
+    asked = []
+
+    def question(_parent, _title, text, **_kwargs):
+        asked.append(text)
+        return answer
+
+    monkeypatch.setattr(dialogs.QCustomMessageBox, "question", question)
+
+    return asked
+
+
 def _typed(monkeypatch, text):
     monkeypatch.setattr(
         dialogs.QCustomTextInput, "get_text", lambda *_args, **_kwargs: text
     )
+
+
+def _grid_of(*blocks):
+    """A manager whose grid has these cells, in this order."""
+
+    for index, block in enumerate(blocks):
+        block.video_params.id = str(index)
+
+    manager = _manager()
+    manager._ctx.commands.layout_order = lambda: [str(i) for i in range(len(blocks))]
+    manager._ctx.video_blocks = SimpleNamespace(
+        blocks_for_ids=lambda ids: [blocks[int(i)] for i in ids]
+    )
+
+    return manager
+
+
+class TestMakingAll:
+    def test_each_under_its_own_name_with_its_loops(self, stored, monkeypatch):
+        stored["favourites"] = Favourites([FavouriteFolder(name="Grid")])
+        asked = Mock(return_value=(stored["favourites"], (0,)))
+        monkeypatch.setattr(manager_module.AddAllFavouritesDialog, "ask", asked)
+        first = _block(uri=NEW, title="First", loops=[(1, 2)])
+        second = _block(uri=HERE, title=None, loop_start=500)
+
+        _grid_of(first, second).cmd_add_all_to_favourites()
+
+        assert stored["favourites"].items_at((0,)) == [
+            FavouriteVideo(name="First", path=NEW, loops=[(1, 2)], position=0),
+            FavouriteVideo(name=HERE.stem, path=HERE, loop_start=500, position=0),
+        ]
+        assert (
+            asked.call_args.kwargs["count"],
+            asked.call_args.kwargs["left_out"],
+        ) == (
+            2,
+            0,
+        )
+
+    def test_streams_left_out_and_said_to_be(self, stored, monkeypatch):
+        asked = Mock(return_value=(stored["favourites"], (2,)))
+        monkeypatch.setattr(manager_module.AddAllFavouritesDialog, "ask", asked)
+
+        _grid_of(
+            _block(uri="https://example.com/v"), _block(uri=NEW)
+        ).cmd_add_all_to_favourites()
+
+        assert (
+            asked.call_args.kwargs["count"],
+            asked.call_args.kwargs["left_out"],
+        ) == (
+            1,
+            1,
+        )
+        assert [v.path for v in stored["favourites"].items_at((2,))] == [NEW]
+
+    def test_ones_already_kept_replaced(self, stored, monkeypatch):
+        # HERE is a favourite three times over in _favourites()
+        monkeypatch.setattr(
+            manager_module.AddAllFavouritesDialog,
+            "ask",
+            Mock(return_value=(stored["favourites"], (2,))),
+        )
+
+        _grid_of(_block(uri=HERE, title="Again")).cmd_add_all_to_favourites()
+
+        favourites = stored["favourites"]
+        assert favourites.find_video(HERE) == ((1,), favourites.items_at((1,))[0])
+        assert [i.name for i in favourites.items_at((1,))] == ["Again"]
+
+    def test_nothing_kept_when_thought_better_of(self, stored, monkeypatch):
+        before = stored["favourites"].model_copy(deep=True)
+        monkeypatch.setattr(
+            manager_module.AddAllFavouritesDialog, "ask", Mock(return_value=None)
+        )
+
+        _grid_of(_block(uri=NEW)).cmd_add_all_to_favourites()
+
+        assert stored["favourites"] == before
+
+    def test_not_asked_with_no_file_open(self, stored, monkeypatch):
+        asked = Mock()
+        monkeypatch.setattr(manager_module.AddAllFavouritesDialog, "ask", asked)
+
+        _grid_of(_block(uri="https://example.com/v")).cmd_add_all_to_favourites()
+
+        asked.assert_not_called()
+
+
+class TestTheAddAllWindow:
+    def test_a_folder_picked_or_made(self, monkeypatch):
+        dialog = AddAllFavouritesDialog(_favourites(), count=3, left_out=0)
+        _typed(monkeypatch, "This grid")
+
+        dialog.new_folder()
+
+        assert dialog.selected_folder == (3,)
+        assert dialog.favourites.root[3] == FavouriteFolder(name="This grid")
+
+    def test_how_many_said(self):
+        dialog = AddAllFavouritesDialog(Favourites(), count=3, left_out=2)
+
+        assert "3" in dialog.count_note.text()
+        assert not dialog.left_out_note.isHidden()
+        assert "2" in dialog.left_out_note.text()
+
+    def test_none_left_out_not_said(self):
+        dialog = AddAllFavouritesDialog(Favourites(), count=3, left_out=0)
+
+        assert dialog.left_out_note.isHidden()
 
 
 class TestTheAddWindow:
@@ -477,6 +675,15 @@ class TestTheAddWindow:
         assert "3" in dialog.loops_note.text()
         assert dialog.loop_start_note.isHidden()
 
+    def test_where_it_opens_is_said(self):
+        dialog = AddFavouriteDialog(Favourites(), name="C", loops=0, position=83_456)
+
+        assert not dialog.position_note.isHidden()
+        assert "1:23.456" in dialog.position_note.text()
+        assert AddFavouriteDialog(
+            Favourites(), name="C", loops=0
+        ).position_note.isHidden()
+
     def test_a_loop_begun_is_said(self):
         dialog = AddFavouriteDialog(Favourites(), name="C", loops=0, loop_start=12_000)
 
@@ -497,6 +704,17 @@ def _tree_item(dialog, *path):
 class TestTheManageWindow:
     def test_as_it_was_given_back_untouched(self):
         assert ManageFavouritesDialog(_favourites()).favourites() == _favourites()
+
+    def test_where_each_opens_is_shown(self):
+        favourites = Favourites([_video("At"), _video("Never")])
+        favourites.root[0].position = 83_456
+
+        dialog = ManageFavouritesDialog(favourites)
+
+        assert _tree_item(dialog, 0).text(2) == "1:23.456"
+        assert _tree_item(dialog, 1).text(2) == ""
+        assert _tree_item(dialog, 0).text(3) == str(HERE)
+        assert dialog.favourites() == favourites
 
     def test_loops_and_a_loop_begun_are_shown(self):
         dialog = ManageFavouritesDialog(_favourites())
@@ -534,7 +752,8 @@ class TestTheManageWindow:
         assert [i.name for i in favourites.root] == ["Music", "Empty"]
         assert favourites.items_at((1,)) == [_video("Top", loops=[(1000, 2000)])]
 
-    def test_removed_with_what_it_holds(self):
+    def test_removed_with_what_it_holds(self, monkeypatch):
+        asked = _answered(monkeypatch, QMessageBox.Yes)
         dialog = ManageFavouritesDialog(_favourites())
         _tree_item(dialog, 1).setSelected(True)
         _tree_item(dialog, 0).setSelected(True)
@@ -542,6 +761,41 @@ class TestTheManageWindow:
         dialog.remove_selected()
 
         assert [i.name for i in dialog.favourites().root] == ["Empty"]
+        assert asked == ['Remove the folder "Music" and everything in it?']
+
+    def test_a_folder_kept_when_not_sure(self, monkeypatch):
+        _answered(monkeypatch, QMessageBox.No)
+        dialog = ManageFavouritesDialog(_favourites())
+        _tree_item(dialog, 1).setSelected(True)
+        _tree_item(dialog, 0).setSelected(True)
+
+        dialog.remove_selected()
+
+        assert dialog.favourites() == _favourites()
+
+    def test_folders_asked_about_together(self, monkeypatch):
+        asked = _answered(monkeypatch, QMessageBox.Yes)
+        dialog = ManageFavouritesDialog(_favourites())
+        _tree_item(dialog, 1).setSelected(True)
+        _tree_item(dialog, 2).setSelected(True)
+
+        dialog.remove_selected()
+
+        assert [i.name for i in dialog.favourites().root] == ["Top"]
+        assert asked == ["Remove 2 folders and everything in them?"]
+
+    def test_videos_alone_removed_without_asking(self, monkeypatch):
+        asked = _answered(monkeypatch, QMessageBox.No)
+        dialog = ManageFavouritesDialog(_favourites())
+        _tree_item(dialog, 0).setSelected(True)
+        _tree_item(dialog, 1, 0).setSelected(True)
+
+        dialog.remove_selected()
+
+        favourites = dialog.favourites()
+        assert [i.name for i in favourites.root] == ["Music", "Empty"]
+        assert len(favourites.items_at((0,))) == 1
+        assert asked == []
 
     @pytest.mark.parametrize(
         ("picked", "made_in"),

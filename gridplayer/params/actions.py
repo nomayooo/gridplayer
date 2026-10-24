@@ -2833,6 +2833,12 @@ ACTIONS = MappingProxyType(
             "func": "add_to_favourites",
             "enable_if": "is_active_local_file",
         },
+        "Add All to Favourites": {
+            "title": translate("Favourites", "Add All to Favourites..."),
+            "icon": "favourite-add",
+            "func": "add_all_to_favourites",
+            "enable_if": "is_any_videos_local_file",
+        },
         "Manage Favourites": {
             "title": translate("Favourites", "Manage Favourites..."),
             "icon": "favourites",

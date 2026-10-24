@@ -2,9 +2,9 @@
 browser keeps its favourites: kept with the player's settings, not with a
 playlist, and each opened into the grid as a video of its own.
 
-A favourite is a file on disk, with a name of the viewer's and the A-B loops
-it had when it was made a favourite, a loop begun and not finished among them,
-which it is opened with again.
+A favourite is a file on disk, with a name of the viewer's, the A-B loops it
+had when it was made a favourite, a loop begun and not finished among them,
+and where in it it was, which it is opened with and at again.
 """
 
 from pathlib import Path
@@ -28,6 +28,13 @@ class FavouriteVideo(BaseModel):
     # where a loop begun and not yet finished starts (models.video's
     # loop_start), None for none
     loop_start: int | None = None
+    # where in it it was when made a favourite, opened there again: in ms,
+    # None for one made before favourites kept it, opened as it opens
+    position: int | None = None
+    # which loop played, and whether it played outside them, from a seek
+    # there (models.video's own)
+    loop_index: int = 0
+    is_outside_loops: bool = False
 
 
 class FavouriteFolder(BaseModel):

@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QShortcut,
     QTreeWidget,
@@ -22,6 +23,7 @@ from PyQt5.QtWidgets import (
 )
 
 from gridplayer.dialogs.input_dialog import QCustomTextInput
+from gridplayer.dialogs.messagebox import QCustomMessageBox
 from gridplayer.models.favourites import (
     FavouriteFolder,
     Favourites,
@@ -55,88 +57,36 @@ def _new_folder_name(parent) -> str | None:
     return name or None
 
 
-class AddFavouriteDialog(QDialog):
-    """The active video made a favourite: under what name, in which folder."""
+class _InFolderDialog(QDialog):
+    """Favourites made in a folder of the viewer's picking, or of their
+    making, to be put in on OK: the folder picked, and the buttons."""
 
-    def __init__(
-        self,
-        favourites: Favourites,
-        name: str,
-        loops: int,
-        loop_start: int | None = None,
-        folder: FolderPath = (),
-        is_kept: bool = False,
-        **kwargs,
-    ):
+    def __init__(self, favourites: Favourites, **kwargs):
         super().__init__(**kwargs)
-
-        self.setWindowTitle(translate("Favourites", "Add to Favourites"))
 
         # a copy, which folders made here go into, kept only on OK
         self.favourites = favourites.model_copy(deep=True)
 
-        self.name = QLineEdit(name, self)
-        self.name.setMinimumWidth(320)
-        self.name.selectAll()
-
         self.folder = QComboBox(self)
+        self.folder.setMinimumWidth(320)
 
         self.new_folder_button = QPushButton(
             translate("Favourites", "New Folder..."), self
         )
         self.new_folder_button.clicked.connect(self.new_folder)
 
-        self.loops_note = QLabel(self)
-        self.loops_note.setVisible(loops > 0)
-        self.loops_note.setText(
-            translate("Favourites", "A-B loops kept with it: {COUNT}").format(
-                COUNT=count_txt(loops)
-            )
-        )
-
-        # a loop begun and not finished, kept with it too
-        self.loop_start_note = QLabel(self)
-        self.loop_start_note.setVisible(loop_start is not None)
-        if loop_start is not None:
-            self.loop_start_note.setText(
-                translate("Favourites", "A-B loop start kept with it: {TIME}").format(
-                    TIME=ms_time_txt(loop_start, strip=True)
-                )
-            )
-
-        # a favourite already, which this one takes the place of
-        self.kept_note = QLabel(
-            translate("Favourites", "Already in your favourites: this replaces it."),
-            self,
-        )
-        self.kept_note.setVisible(is_kept)
-
-        buttons = QDialogButtonBox(
+        self.buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self
         )
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        self.ok_button = buttons.button(QDialogButtonBox.Ok)
-        self.name.textChanged.connect(
-            lambda text: self.ok_button.setEnabled(bool(text.strip()))
-        )
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
+        self.ok_button = self.buttons.button(QDialogButtonBox.Ok)
 
+    def _folder_row(self) -> QHBoxLayout:
         folder_row = QHBoxLayout()
         folder_row.addWidget(self.folder, 1)
         folder_row.addWidget(self.new_folder_button)
-
-        form = QFormLayout()
-        form.addRow(translate("Favourites", "Name:"), self.name)
-        form.addRow(translate("Favourites", "Folder:"), folder_row)
-
-        layout = QVBoxLayout(self)
-        layout.addLayout(form)
-        layout.addWidget(self.loops_note)
-        layout.addWidget(self.loop_start_note)
-        layout.addWidget(self.kept_note)
-        layout.addWidget(buttons)
-
-        self.fill_folders(selected=folder)
+        return folder_row
 
     def fill_folders(self, selected: FolderPath = ()):
         self.folder.clear()
@@ -171,6 +121,82 @@ class AddFavouriteDialog(QDialog):
         new_path = (*parent, len(self.favourites.items_at(parent)) - 1)
         self.fill_folders(selected=new_path)
 
+
+class AddFavouriteDialog(_InFolderDialog):
+    """The active video made a favourite: under what name, in which folder."""
+
+    def __init__(
+        self,
+        favourites: Favourites,
+        name: str,
+        loops: int,
+        loop_start: int | None = None,
+        folder: FolderPath = (),
+        is_kept: bool = False,
+        position: int | None = None,
+        **kwargs,
+    ):
+        super().__init__(favourites, **kwargs)
+
+        self.setWindowTitle(translate("Favourites", "Add to Favourites"))
+
+        self.name = QLineEdit(name, self)
+        self.name.setMinimumWidth(320)
+        self.name.selectAll()
+
+        self.loops_note = QLabel(self)
+        self.loops_note.setVisible(loops > 0)
+        self.loops_note.setText(
+            translate("Favourites", "A-B loops kept with it: {COUNT}").format(
+                COUNT=count_txt(loops)
+            )
+        )
+
+        # a loop begun and not finished, kept with it too
+        self.loop_start_note = QLabel(self)
+        self.loop_start_note.setVisible(loop_start is not None)
+        if loop_start is not None:
+            self.loop_start_note.setText(
+                translate("Favourites", "A-B loop start kept with it: {TIME}").format(
+                    TIME=ms_time_txt(loop_start, strip=True)
+                )
+            )
+
+        # where it opens, as it is now
+        self.position_note = QLabel(self)
+        self.position_note.setVisible(position is not None)
+        if position is not None:
+            self.position_note.setText(
+                translate("Favourites", "Opens at {TIME}").format(
+                    TIME=ms_time_txt(position, strip=True)
+                )
+            )
+
+        # a favourite already, which this one takes the place of
+        self.kept_note = QLabel(
+            translate("Favourites", "Already in your favourites: this replaces it."),
+            self,
+        )
+        self.kept_note.setVisible(is_kept)
+
+        self.name.textChanged.connect(
+            lambda text: self.ok_button.setEnabled(bool(text.strip()))
+        )
+
+        form = QFormLayout()
+        form.addRow(translate("Favourites", "Name:"), self.name)
+        form.addRow(translate("Favourites", "Folder:"), self._folder_row())
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(self.position_note)
+        layout.addWidget(self.loops_note)
+        layout.addWidget(self.loop_start_note)
+        layout.addWidget(self.kept_note)
+        layout.addWidget(self.buttons)
+
+        self.fill_folders(selected=folder)
+
     @classmethod
     def ask(
         cls,
@@ -181,6 +207,7 @@ class AddFavouriteDialog(QDialog):
         loop_start: int | None = None,
         folder: FolderPath = (),
         is_kept: bool = False,
+        position: int | None = None,
     ):
         """(the favourites with any folders made, the folder picked, the
         name given), None for the viewer thinking better of it."""
@@ -192,6 +219,7 @@ class AddFavouriteDialog(QDialog):
             loop_start=loop_start,
             folder=folder,
             is_kept=is_kept,
+            position=position,
             parent=parent,
         )
 
@@ -206,6 +234,59 @@ class AddFavouriteDialog(QDialog):
         return dialog.favourites, dialog.selected_folder, name
 
 
+class AddAllFavouritesDialog(_InFolderDialog):
+    """All the videos open made favourites, each under its own name, in a
+    folder of the viewer's picking."""
+
+    def __init__(self, favourites: Favourites, count: int, left_out: int, **kwargs):
+        super().__init__(favourites, **kwargs)
+
+        self.setWindowTitle(translate("Favourites", "Add All to Favourites"))
+
+        self.count_note = QLabel(
+            translate(
+                "Favourites",
+                "Videos to add: {COUNT}. Any already in your favourites are replaced.",
+            ).format(COUNT=count_txt(count)),
+            self,
+        )
+        self.count_note.setWordWrap(True)
+
+        # streams and links, which favourites are not made of
+        self.left_out_note = QLabel(
+            translate("Favourites", "Left out, as not files on disk: {COUNT}").format(
+                COUNT=count_txt(left_out)
+            ),
+            self,
+        )
+        self.left_out_note.setVisible(left_out > 0)
+
+        form = QFormLayout()
+        form.addRow(translate("Favourites", "Folder:"), self._folder_row())
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(self.count_note)
+        layout.addWidget(self.left_out_note)
+        layout.addWidget(self.buttons)
+
+        self.fill_folders()
+
+    @classmethod
+    def ask(cls, parent, favourites: Favourites, count: int, left_out: int):
+        """(the favourites with any folders made, the folder picked), None
+        for the viewer thinking better of it."""
+
+        dialog = cls(
+            favourites=favourites, count=count, left_out=left_out, parent=parent
+        )
+
+        if not dialog.exec():
+            return None
+
+        return dialog.favourites, dialog.selected_folder
+
+
 class ManageFavouritesDialog(QDialog):
     """The favourites as a tree, to be put in order: dragged into folders and
     about, folders made, anything renamed or removed. Kept only on OK."""
@@ -217,11 +298,12 @@ class ManageFavouritesDialog(QDialog):
         self.resize(640, 420)
 
         self.tree = QTreeWidget(self)
-        self.tree.setColumnCount(3)
+        self.tree.setColumnCount(4)
         self.tree.setHeaderLabels(
             [
                 translate("Favourites", "Name"),
                 translate("Favourites", "A-B Loops"),
+                translate("Favourites", "Opens At"),
                 translate("Favourites", "File"),
             ]
         )
@@ -284,7 +366,7 @@ class ManageFavouritesDialog(QDialog):
                 parent_item.addChild(self._video_item(item))
 
     def _folder_item(self, name: str) -> QTreeWidgetItem:
-        tree_item = QTreeWidgetItem([name, "", ""])
+        tree_item = QTreeWidgetItem([name, "", "", ""])
         tree_item.setIcon(0, QIcon.fromTheme("favourites-folder"))
         tree_item.setFlags(
             Qt.ItemIsEnabled
@@ -300,9 +382,15 @@ class ManageFavouritesDialog(QDialog):
         if video.loop_start is not None:
             loops.append(_loop_start_txt(video.loop_start))
 
-        tree_item = QTreeWidgetItem([video.name, ", ".join(loops), str(video.path)])
+        opens_at = (
+            "" if video.position is None else ms_time_txt(video.position, strip=True)
+        )
+
+        tree_item = QTreeWidgetItem(
+            [video.name, ", ".join(loops), opens_at, str(video.path)]
+        )
         tree_item.setIcon(0, QIcon.fromTheme("add-files"))
-        tree_item.setToolTip(2, str(video.path))
+        tree_item.setToolTip(3, str(video.path))
         tree_item.setData(0, ITEM_FAVOURITE, video)
         # nothing is dropped into a video, only next to it
         tree_item.setFlags(
@@ -381,9 +469,38 @@ class ManageFavouritesDialog(QDialog):
             self.tree.editItem(selected[0], 0)
 
     def remove_selected(self):
-        for tree_item in self.tree.selectedItems():
+        selected = self.tree.selectedItems()
+
+        if not self._is_removing_sure(selected):
+            return
+
+        for tree_item in selected:
             parent_item = tree_item.parent() or self.tree.invisibleRootItem()
             parent_item.removeChild(tree_item)
+
+    def _is_removing_sure(self, selected) -> bool:
+        """Asked first when a folder is among them, as all it holds goes
+        with it; videos alone go without asking."""
+
+        folders = [i for i in selected if i.data(0, ITEM_FAVOURITE) is None]
+
+        if not folders:
+            return True
+
+        if len(folders) == 1:
+            question = translate(
+                "Favourites", 'Remove the folder "{NAME}" and everything in it?'
+            ).format(NAME=folders[0].text(0).strip())
+        else:
+            question = translate(
+                "Favourites", "Remove {COUNT} folders and everything in them?"
+            ).format(COUNT=count_txt(len(folders)))
+
+        answer = QCustomMessageBox.question(
+            self, translate("Favourites", "Remove"), question
+        )
+
+        return answer == QMessageBox.Yes
 
     @classmethod
     def edit(cls, parent, favourites: Favourites) -> Favourites | None:

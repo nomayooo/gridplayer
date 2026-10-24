@@ -516,8 +516,9 @@ class AddVideosManager(ManagerBase):
 
     def add_favourite_videos(self, favourites):
         """Favourites into cells of their own, each with the loops it was
-        kept with, and a loop begun and not finished playing from where it
-        was begun; one whose file is gone is said to be, the rest added."""
+        kept with, at where it was kept at, else, with a loop begun and not
+        finished, where that was begun; one whose file is gone is said to
+        be, the rest added."""
 
         videos, missing = [], []
 
@@ -530,7 +531,13 @@ class AddVideosManager(ManagerBase):
                 favourite.path,
                 loops=list(favourite.loops),
                 loop_start=favourite.loop_start,
-                current_position=favourite.loop_start,
+                current_position=(
+                    favourite.loop_start
+                    if favourite.position is None
+                    else favourite.position
+                ),
+                loop_index=favourite.loop_index,
+                is_outside_loops=favourite.is_outside_loops,
             )
             if video is not None:
                 videos.append(video)
