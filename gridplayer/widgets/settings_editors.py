@@ -26,6 +26,7 @@ from gridplayer.params.settings_fields.kinds import (
     KeymapField,
     LanguageField,
     PathField,
+    PercentField,
     ResolverPatternsField,
     SettingField,
     SpinField,
@@ -369,6 +370,33 @@ class _FloatSpinEditor(_SpinEditor):
         return widget
 
 
+class _PercentEditor(Editor):
+    """A share from 0 to 1 edited as a whole percentage."""
+
+    spec: PercentField
+
+    def _make_widget(self):
+        widget = QSpinBox()
+        widget.setMinimumWidth(SPIN_MIN_WIDTH)
+        widget.setRange(0, 100)
+        widget.setSingleStep(5)
+        widget.setSuffix("%")
+        return widget
+
+    @property
+    def changed(self):
+        return self.widget.valueChanged
+
+    def set_value(self, value):
+        self.widget.setValue(round(float(value) * 100))
+
+    def value(self):
+        return self.widget.value() / 100
+
+    def text_of(self, shown):
+        return f"{round(float(shown) * 100)}%"
+
+
 class _CropEditor(Editor):
     def _make_widget(self):
         return QCompactCropPicker()
@@ -482,6 +510,7 @@ EDITORS: dict[type[SettingField], type[Editor]] = {
     PathField: _PathEditor,
     SpinField: _SpinEditor,
     FloatSpinField: _FloatSpinEditor,
+    PercentField: _PercentEditor,
     CropField: _CropEditor,
     ColorField: _ColorEditor,
     LanguageField: _LanguageEditor,

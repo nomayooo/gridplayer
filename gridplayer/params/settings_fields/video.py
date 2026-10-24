@@ -5,6 +5,7 @@ from gridplayer.params.settings_fields.kinds import (
     ComboField,
     CropField,
     FloatSpinField,
+    PercentField,
     SettingField,
     SpinField,
     TextField,
@@ -67,13 +68,9 @@ VIDEO_FIELDS: tuple[SettingField, ...] = (
         label=translate("SettingsDialog", "Audio mode"),
         choices=choices.audio_modes,
     ),
-    FloatSpinField(
+    PercentField(
         settings_key="video_defaults/volume",
         label=translate("SettingsDialog", "Volume"),
-        minimum=0,
-        maximum=1,
-        decimals=2,
-        step=0.05,
     ),
     CheckboxField(
         settings_key="video_defaults/muted",

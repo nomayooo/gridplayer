@@ -267,7 +267,7 @@ class TestNewVideos:
     def test_what_was_changed_for_them(self, make_window):
         window = make_window()
 
-        window.widget(VOLUME).setValue(0.5)
+        window.widget(VOLUME).setValue(50)
 
         assert window.video_changes() == {VOLUME: 0.5}
 
@@ -286,7 +286,7 @@ class TestNewVideos:
         monkeypatch.setattr(
             window, "_ask_for_videos_here", lambda c: asked.append(c) or answer
         )
-        window.widget(VOLUME).setValue(0.5)
+        window.widget(VOLUME).setValue(50)
 
         window.accept()
 
@@ -297,7 +297,7 @@ class TestNewVideos:
     def test_cancel_in_the_question_goes_back(self, make_window, monkeypatch):
         window = make_window(has_videos=True)
         monkeypatch.setattr(window, "_ask_for_videos_here", lambda _changes: None)
-        window.widget(VOLUME).setValue(0.5)
+        window.widget(VOLUME).setValue(50)
         window.show()
 
         window.accept()
@@ -309,7 +309,7 @@ class TestNewVideos:
         window = make_window(has_videos=False)
         asked = Mock()
         monkeypatch.setattr(window, "_ask_for_videos_here", asked)
-        window.widget(VOLUME).setValue(0.5)
+        window.widget(VOLUME).setValue(50)
 
         window.accept()
 
