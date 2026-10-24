@@ -1549,6 +1549,13 @@ ACTIONS = MappingProxyType(
             "icon": "open-in-browser",
             "func": "move_to_new_window",
         },
+        "Delete File": {
+            "title": translate("Actions", "Delete File..."),
+            "key": "Shift+Del",
+            "icon": "trash",
+            "func": "delete_files",
+            "show_if": "is_any_to_delete",
+        },
         "Close": {
             "title": translate("Actions", "Close"),
             "key": "Ctrl+F4",

@@ -39,6 +39,7 @@ class NewWindowManager(ManagerBase):
             "clear_cell_selection": self.cmd_clear_cell_selection,
             "is_active_cell_selected": self.is_active_cell_selected,
             "is_any_cells_selected": self.is_any_cells_selected,
+            "selected_cells": self._selected_blocks,
             "move_to_new_window": self.cmd_move_to_new_window,
             "open_moved_cells": self.open_moved_cells,
         }
