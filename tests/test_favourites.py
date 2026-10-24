@@ -14,7 +14,11 @@ import pytest
 from PyQt5.QtWidgets import QWidget
 
 from gridplayer.dialogs import favourites as dialogs
-from gridplayer.dialogs.favourites import AddFavouriteDialog, ManageFavouritesDialog
+from gridplayer.dialogs.favourites import (
+    AddAllFavouritesDialog,
+    AddFavouriteDialog,
+    ManageFavouritesDialog,
+)
 from gridplayer.models.favourites import (
     FavouriteFolder,
     Favourites,
@@ -417,6 +421,116 @@ def _typed(monkeypatch, text):
     monkeypatch.setattr(
         dialogs.QCustomTextInput, "get_text", lambda *_args, **_kwargs: text
     )
+
+
+def _grid_of(*blocks):
+    """A manager whose grid has these cells, in this order."""
+
+    for index, block in enumerate(blocks):
+        block.video_params.id = str(index)
+
+    manager = _manager()
+    manager._ctx.commands.layout_order = lambda: [str(i) for i in range(len(blocks))]
+    manager._ctx.video_blocks = SimpleNamespace(
+        blocks_for_ids=lambda ids: [blocks[int(i)] for i in ids]
+    )
+
+    return manager
+
+
+class TestMakingAll:
+    def test_each_under_its_own_name_with_its_loops(self, stored, monkeypatch):
+        stored["favourites"] = Favourites([FavouriteFolder(name="Grid")])
+        asked = Mock(return_value=(stored["favourites"], (0,)))
+        monkeypatch.setattr(manager_module.AddAllFavouritesDialog, "ask", asked)
+        first = _block(uri=NEW, title="First", loops=[(1, 2)])
+        second = _block(uri=HERE, title=None, loop_start=500)
+
+        _grid_of(first, second).cmd_add_all_to_favourites()
+
+        assert stored["favourites"].items_at((0,)) == [
+            FavouriteVideo(name="First", path=NEW, loops=[(1, 2)]),
+            FavouriteVideo(name=HERE.stem, path=HERE, loop_start=500),
+        ]
+        assert (
+            asked.call_args.kwargs["count"],
+            asked.call_args.kwargs["left_out"],
+        ) == (
+            2,
+            0,
+        )
+
+    def test_streams_left_out_and_said_to_be(self, stored, monkeypatch):
+        asked = Mock(return_value=(stored["favourites"], (2,)))
+        monkeypatch.setattr(manager_module.AddAllFavouritesDialog, "ask", asked)
+
+        _grid_of(
+            _block(uri="https://example.com/v"), _block(uri=NEW)
+        ).cmd_add_all_to_favourites()
+
+        assert (
+            asked.call_args.kwargs["count"],
+            asked.call_args.kwargs["left_out"],
+        ) == (
+            1,
+            1,
+        )
+        assert [v.path for v in stored["favourites"].items_at((2,))] == [NEW]
+
+    def test_ones_already_kept_replaced(self, stored, monkeypatch):
+        # HERE is a favourite three times over in _favourites()
+        monkeypatch.setattr(
+            manager_module.AddAllFavouritesDialog,
+            "ask",
+            Mock(return_value=(stored["favourites"], (2,))),
+        )
+
+        _grid_of(_block(uri=HERE, title="Again")).cmd_add_all_to_favourites()
+
+        favourites = stored["favourites"]
+        assert favourites.find_video(HERE) == ((1,), favourites.items_at((1,))[0])
+        assert [i.name for i in favourites.items_at((1,))] == ["Again"]
+
+    def test_nothing_kept_when_thought_better_of(self, stored, monkeypatch):
+        before = stored["favourites"].model_copy(deep=True)
+        monkeypatch.setattr(
+            manager_module.AddAllFavouritesDialog, "ask", Mock(return_value=None)
+        )
+
+        _grid_of(_block(uri=NEW)).cmd_add_all_to_favourites()
+
+        assert stored["favourites"] == before
+
+    def test_not_asked_with_no_file_open(self, stored, monkeypatch):
+        asked = Mock()
+        monkeypatch.setattr(manager_module.AddAllFavouritesDialog, "ask", asked)
+
+        _grid_of(_block(uri="https://example.com/v")).cmd_add_all_to_favourites()
+
+        asked.assert_not_called()
+
+
+class TestTheAddAllWindow:
+    def test_a_folder_picked_or_made(self, monkeypatch):
+        dialog = AddAllFavouritesDialog(_favourites(), count=3, left_out=0)
+        _typed(monkeypatch, "This grid")
+
+        dialog.new_folder()
+
+        assert dialog.selected_folder == (3,)
+        assert dialog.favourites.root[3] == FavouriteFolder(name="This grid")
+
+    def test_how_many_said(self):
+        dialog = AddAllFavouritesDialog(Favourites(), count=3, left_out=2)
+
+        assert "3" in dialog.count_note.text()
+        assert not dialog.left_out_note.isHidden()
+        assert "2" in dialog.left_out_note.text()
+
+    def test_none_left_out_not_said(self):
+        dialog = AddAllFavouritesDialog(Favourites(), count=3, left_out=0)
+
+        assert dialog.left_out_note.isHidden()
 
 
 class TestTheAddWindow:

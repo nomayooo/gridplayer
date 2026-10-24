@@ -5,7 +5,11 @@ time or a folder's at once."""
 
 from pathlib import Path
 
-from gridplayer.dialogs.favourites import AddFavouriteDialog, ManageFavouritesDialog
+from gridplayer.dialogs.favourites import (
+    AddAllFavouritesDialog,
+    AddFavouriteDialog,
+    ManageFavouritesDialog,
+)
 from gridplayer.models.favourites import (
     FavouriteFolder,
     Favourites,
@@ -27,6 +31,7 @@ class FavouritesManager(ManagerBase):
     def commands(self):
         return {
             "add_to_favourites": self.cmd_add_to_favourites,
+            "add_all_to_favourites": self.cmd_add_all_to_favourites,
             "manage_favourites": self.cmd_manage_favourites,
             "menu_generator_favourites": self.menu_generator_favourites,
             "menu_generator_favourites_folder": self.menu_generator_favourites_folder,
@@ -147,15 +152,37 @@ class FavouritesManager(ManagerBase):
 
         favourites, folder, name = added
 
-        favourites.put_video(
-            folder,
-            FavouriteVideo(
-                name=name,
-                path=params.uri,
-                loops=list(params.loops),
-                loop_start=params.loop_start,
-            ),
+        favourites.put_video(folder, _favourite_of(block, name))
+
+        self._save(favourites)
+
+    def cmd_add_all_to_favourites(self) -> None:
+        """Every video open that is a file, in the grid's order, made a
+        favourite under its own name in the folder picked; one already a
+        favourite replaced, as when it is made one on its own."""
+
+        blocks = self._ctx.video_blocks.blocks_for_ids(
+            self._ctx.commands.layout_order()
         )
+        files = [block for block in blocks if block.is_local_file]
+
+        if not files:
+            return
+
+        added = AddAllFavouritesDialog.ask(
+            parent=self.parent(),
+            favourites=self.favourites,
+            count=len(files),
+            left_out=len(blocks) - len(files),
+        )
+
+        if added is None:
+            return
+
+        favourites, folder = added
+
+        for block in files:
+            favourites.put_video(folder, _favourite_of(block))
 
         self._save(favourites)
 
@@ -166,3 +193,17 @@ class FavouritesManager(ManagerBase):
 
         if edited is not None:
             self._save(edited)
+
+
+def _favourite_of(block, name: str | None = None) -> FavouriteVideo:
+    """The video a cell plays, as a favourite: its file, its loops, under
+    the name given, else the one the cell shows, else the file's."""
+
+    params = block.video_params
+
+    return FavouriteVideo(
+        name=name or block.title or Path(params.uri).stem,
+        path=params.uri,
+        loops=list(params.loops),
+        loop_start=params.loop_start,
+    )
