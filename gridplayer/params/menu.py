@@ -382,6 +382,7 @@ SECTIONS = MappingProxyType(
             "Clear Selection",
             "Move to New Window",
             "---",
+            "Delete File",
             "Close",
         ],
         "video_all": [

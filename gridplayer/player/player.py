@@ -9,6 +9,7 @@ from gridplayer.player.managers.actions import ActionsManager
 from gridplayer.player.managers.active_block import ActiveBlockManager
 from gridplayer.player.managers.add_videos import AddVideosManager
 from gridplayer.player.managers.bookmarks import BookmarksManager
+from gridplayer.player.managers.delete_files import DeleteFilesManager
 from gridplayer.player.managers.dialogs import DialogsManager
 from gridplayer.player.managers.drag_n_drop import DragNDropManager
 from gridplayer.player.managers.favourites import FavouritesManager
@@ -73,6 +74,7 @@ class Player(QWidget, ManagersManager):
             "recent_list": RecentListManager,
             "favourites": FavouritesManager,
             "new_window": NewWindowManager,
+            "delete_files": DeleteFilesManager,
             "dialogs": DialogsManager,
             "settings": SettingsManager,
             "actions": ActionsManager,
@@ -258,6 +260,9 @@ class Player(QWidget, ManagersManager):
                 ("s.moved_cells_received", "open_moved_cells"),
                 ("cells_moved_in", "grid.add_videos_to_layout"),
                 ("video_blocks.video_count_changed", "forget_cells_gone"),
+                ("error", "dialogs.error"),
+            ],
+            "delete_files": [
                 ("error", "dialogs.error"),
             ],
             "tray": [

@@ -205,6 +205,36 @@ class TestThePreviewer:
         assert previewer.sent == []
         assert not previewer.is_readable(FILE)
 
+    def _running(self, previewer):
+        """The process as if started, and closed when it is."""
+
+        previewer._process = Mock(**{"is_alive.return_value": False})
+        previewer._conn = SimpleNamespace(send=previewer.sent.append, close=Mock())
+
+        return previewer._process
+
+    def test_the_file_it_read_last_let_go_of_by_closing_it(self, previewer):
+        process = self._running(previewer)
+        previewer.request(FILE, 5000, Mock())
+        previewer._on_frame_read(FILE, 5000, _picture())
+
+        previewer.let_go_of(FILE)
+
+        process.join.assert_called_once()
+        assert previewer.sent[-1] is None
+        assert previewer._process is None
+        assert (FILE, 5000) not in previewer._frames
+
+    def test_another_file_left_open(self, previewer):
+        process = self._running(previewer)
+        previewer.request(FILE, 5000, Mock())
+
+        previewer.let_go_of(FILE.with_name("other.mp4"))
+
+        process.join.assert_not_called()
+        assert previewer._process is process
+        previewer._process = previewer._conn = None
+
     def test_a_file_the_process_went_down_on_is_not_asked_about_again(self, previewer):
         previewer.request(FILE, 5000, Mock())
 
