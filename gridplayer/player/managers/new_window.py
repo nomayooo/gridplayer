@@ -67,9 +67,11 @@ class NewWindowManager(ManagerBase):
         self._anchor = block.id
 
     def cmd_select_cell_range(self):
-        """Every cell from the one picked last up to the active one, in the
-        grid's order, picked out too; with none picked yet, the active one
-        alone."""
+        """The cells from the one picked last up to the active one, in the
+        grid's order, the ones picked out, and no others: as a file manager
+        has it, a range clicked again from the same one grows or shrinks to
+        where it is clicked. With none picked yet, the active one alone, the
+        range starting from it."""
 
         block = self._ctx.active_block
 
@@ -82,19 +84,15 @@ class NewWindowManager(ManagerBase):
         ids = [b.id for b in in_grid]
 
         if self._anchor not in ids or block.id not in ids:
-            self._select(block)
             self._anchor = block.id
-            return
 
         first, last = sorted((ids.index(self._anchor), ids.index(block.id)))
+        in_range = in_grid[first : last + 1]
 
-        for each in in_grid[first : last + 1]:
-            self._select(each)
+        for each in in_grid:
+            each.is_selected = each in in_range
 
-    def _select(self, block):
-        if block.id not in self._selected:
-            self._selected.append(block.id)
-        block.is_selected = True
+        self._selected = [each.id for each in in_range]
 
     def cmd_clear_cell_selection(self):
         for block in self._selected_blocks():

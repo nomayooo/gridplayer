@@ -1,6 +1,7 @@
 """Cells picked out with the mouse, Ctrl+Click one and Shift+Click another
-for those between too, and the ones picked made favourites all at once,
-into a folder, by Add to Favourites.
+for those between too, Shift+Click nearer shrinking the range again as a
+file manager does, and the ones picked made favourites all at once, into a
+folder, by Add to Favourites.
 """
 
 
@@ -35,6 +36,13 @@ def scenario(d):
 
     _click(d, c, Qt.ShiftModifier)
     d.check("a to c picked", [x.is_selected for x in cells] == [True, True, True])
+
+    # as a file manager: from a again, to b now, c let go
+    _click(d, b, Qt.ShiftModifier)
+    d.check("a to b only", [x.is_selected for x in cells] == [True, True, False])
+
+    _click(d, c, Qt.ShiftModifier)
+    d.check("a to c again", [x.is_selected for x in cells] == [True, True, True])
     d.shot("three picked")
 
     item = d.ctx.actions["Add to Favourites"]

@@ -224,13 +224,32 @@ class TestPickingARange:
 
         assert [b.is_selected for b in blocks] == [True, True, True]
 
-    def test_ones_picked_elsewhere_kept(self, manager, blocks):
+    def test_ones_picked_outside_it_let_go(self, manager, blocks):
         blocks.append(_block("d.mp4"))
         _select(manager, blocks[3], blocks[0])
 
         _shift_click(manager, blocks[1])
 
-        assert [b.is_selected for b in blocks] == [True, True, False, True]
+        assert [b.is_selected for b in blocks] == [True, True, False, False]
+        assert manager._selected == [blocks[0].id, blocks[1].id]
+
+    def test_clicked_again_nearer_shrinks_it(self, manager, blocks):
+        blocks.append(_block("d.mp4"))
+        _select(manager, blocks[0])
+        _shift_click(manager, blocks[3])
+
+        _shift_click(manager, blocks[1])
+
+        assert [b.is_selected for b in blocks] == [True, True, False, False]
+
+    def test_clicked_again_past_the_start_turns_round(self, manager, blocks):
+        blocks.append(_block("d.mp4"))
+        _select(manager, blocks[1])
+        _shift_click(manager, blocks[3])
+
+        _shift_click(manager, blocks[0])
+
+        assert [b.is_selected for b in blocks] == [True, True, False, False]
 
     def test_with_none_picked_this_one_alone(self, manager, blocks):
         _shift_click(manager, blocks[1])
