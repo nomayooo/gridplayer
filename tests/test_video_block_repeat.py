@@ -169,6 +169,9 @@ def test_stopped_overlay_uses_hide_timer(mocker):
     block.view.is_zoom_ui.return_value = False
     block.navigation.is_list_window_shown = False
     block.isVisible.return_value = True
+    block._is_selected = False
+    block._is_overlay_faded = False
+    block._fade_overlay = lambda: VideoBlock._fade_overlay(block)
 
     VideoBlock.show_overlay(block)
 
@@ -178,6 +181,52 @@ def test_stopped_overlay_uses_hide_timer(mocker):
     VideoBlock.hide_overlay(block)
 
     block.overlay.hide.assert_called_once()
+
+
+def _overlay_block(mocker, is_selected):
+    """A block whose controls hide on their timeout, real in what fades."""
+
+    block = mocker.Mock()
+    block._ctx.is_drag_ui = False
+    block._ctx.is_disable_overlay = False
+    block._ctx.is_overlay_hide_on_timeout = True
+    block._ctx.overlay_timeout = 3
+    block.view.is_zoom_ui.return_value = False
+    block.navigation.is_list_window_shown = False
+    block.isVisible.return_value = True
+    block.is_overlay_fits = True
+    block._is_selected = is_selected
+    block._is_overlay_faded = False
+    block._fade_overlay = lambda: VideoBlock._fade_overlay(block)
+    block._show_mark_only = lambda: VideoBlock._show_mark_only(block)
+    return block
+
+
+def test_a_selected_cell_keeps_its_mark_once_the_controls_fade(mocker):
+    block = _overlay_block(mocker, is_selected=True)
+
+    VideoBlock.hide_overlay(block)
+
+    block.overlay.hide.assert_not_called()
+    block.overlay.set_is_chrome_visible.assert_called_once_with(False)
+    assert block._is_overlay_faded
+
+    VideoBlock.show_overlay(block)
+
+    block.overlay.set_is_chrome_visible.assert_called_with(True)
+    assert not block._is_overlay_faded
+
+
+def test_a_cell_let_go_while_faded_fades_out_whole(mocker):
+    block = _overlay_block(mocker, is_selected=True)
+    VideoBlock.hide_overlay(block)
+
+    block._is_selected = False
+    VideoBlock._fade_overlay(block)
+
+    block.overlay.hide.assert_called_once()
+    block.overlay.set_is_chrome_visible.assert_called_with(True)
+    assert not block._is_overlay_faded
 
 
 def test_stop_playback_destroys_driver(mocker):

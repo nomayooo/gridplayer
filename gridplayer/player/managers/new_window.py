@@ -1,4 +1,5 @@
-"""Cells picked out (Ctrl+Click, or Select in a cell's menu) and moved to a
+"""Cells picked out (Ctrl+Click, or Select in a cell's menu; Shift+Click for
+all those from the one picked last up to it, in the grid's order) and moved to a
 new window: another player, started for them, which takes each as it was,
 its place in the video, its loops, its bookmarks and its list along, as a
 cell dragged to another player comes; and gone from this one.
@@ -32,10 +33,15 @@ class NewWindowManager(ManagerBase):
         # the cells picked out, by id
         self._selected: list[str] = []
 
+        # the cell a range is picked from (Shift+Click): the one picked last
+        self._anchor: str | None = None
+
     @property
     def commands(self):
         return {
             "toggle_cell_selected": self.cmd_toggle_cell_selected,
+            "select_cell_range": self.cmd_select_cell_range,
+            "add_cell_range": self.cmd_add_cell_range,
             "clear_cell_selection": self.cmd_clear_cell_selection,
             "is_active_cell_selected": self.is_active_cell_selected,
             "is_any_cells_selected": self.is_any_cells_selected,
@@ -59,11 +65,56 @@ class NewWindowManager(ManagerBase):
             self._selected.append(block.id)
             block.is_selected = True
 
+        self._anchor = block.id
+
+    def cmd_add_cell_range(self):
+        """The cells from the one picked last up to the active one picked out
+        as well, the others picked kept (Ctrl+Shift+Click)."""
+
+        self._pick_range(is_kept=True)
+
+    def cmd_select_cell_range(self):
+        """The cells from the one picked last up to the active one, in the
+        grid's order, the ones picked out, and no others: as a file manager
+        has it, a range clicked again from the same one grows or shrinks to
+        where it is clicked. With none picked yet, the active one alone, the
+        range starting from it."""
+
+        self._pick_range(is_kept=False)
+
+    def _pick_range(self, is_kept: bool):
+        block = self._ctx.active_block
+
+        if block is None:
+            return
+
+        in_grid = self._ctx.video_blocks.blocks_for_ids(
+            self._ctx.commands.layout_order()
+        )
+        ids = [b.id for b in in_grid]
+
+        if self._anchor not in ids or block.id not in ids:
+            self._anchor = block.id
+
+        first, last = sorted((ids.index(self._anchor), ids.index(block.id)))
+        in_range = in_grid[first : last + 1]
+
+        if not is_kept:
+            for each in in_grid:
+                each.is_selected = False
+            self._selected = []
+
+        for each in in_range:
+            each.is_selected = True
+            if each.id not in self._selected:
+                self._selected.append(each.id)
+
     def cmd_clear_cell_selection(self):
         for block in self._selected_blocks():
             block.is_selected = False
 
         self._selected = []
+        self._anchor = None
 
     def is_active_cell_selected(self) -> bool:
         block = self._ctx.active_block
@@ -81,6 +132,12 @@ class NewWindowManager(ManagerBase):
             for block_id in self._selected
             if self._ctx.video_blocks.by_id(block_id) is not None
         ]
+
+        if (
+            self._anchor is not None
+            and self._ctx.video_blocks.by_id(self._anchor) is None
+        ):
+            self._anchor = None
 
     def _selected_blocks(self) -> list:
         """The cells picked out, in the order the grid has them."""

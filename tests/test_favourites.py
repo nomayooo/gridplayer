@@ -165,8 +165,10 @@ def stored(monkeypatch):
     return values
 
 
-def _manager(active=None):
-    ctx = SimpleNamespace(active_block=active, commands=MagicMock())
+def _manager(active=None, selected=()):
+    commands = MagicMock()
+    commands.selected_cells = lambda: list(selected)
+    ctx = SimpleNamespace(active_block=active, commands=commands)
 
     return FavouritesManager(context=ctx)
 
@@ -594,7 +596,53 @@ class TestMakingAll:
         asked.assert_not_called()
 
 
+class TestMakingTheSelected:
+    def test_all_at_once_into_the_folder_picked(self, stored, monkeypatch):
+        asked = Mock(return_value=(stored["favourites"], (2,)))
+        monkeypatch.setattr(manager_module.AddAllFavouritesDialog, "ask", asked)
+        single = Mock()
+        monkeypatch.setattr(manager_module.AddFavouriteDialog, "ask", single)
+        picked = [_block(title="One"), _block(uri=Path("two.mp4"), title="Two")]
+
+        _manager(active=_block(title="Active"), selected=picked).cmd_add_to_favourites()
+
+        single.assert_not_called()
+        assert asked.call_args.kwargs["count"] == 2
+        assert asked.call_args.kwargs["is_selected"] is True
+        names = [v.name for v in stored["favourites"].items_at((2,))]
+        assert names == ["One", "Two"]
+
+    def test_streams_among_them_left_out(self, stored, monkeypatch):
+        asked = Mock(return_value=None)
+        monkeypatch.setattr(manager_module.AddAllFavouritesDialog, "ask", asked)
+        stream = _block(title="Stream")
+        stream.is_local_file = False
+
+        _manager(selected=[_block(), stream]).cmd_add_to_favourites()
+
+        assert asked.call_args.kwargs["count"] == 1
+        assert asked.call_args.kwargs["left_out"] == 1
+
+    def test_whether_there_is_any(self):
+        stream = _block()
+        stream.is_local_file = False
+
+        assert _manager(active=_block()).is_any_to_favourite()
+        assert not _manager(active=None).is_any_to_favourite()
+        assert not _manager(active=_block(), selected=[stream]).is_any_to_favourite()
+        assert _manager(active=stream, selected=[_block()]).is_any_to_favourite()
+
+
 class TestTheAddAllWindow:
+    def test_titled_for_the_selected(self):
+        all_of_them = AddAllFavouritesDialog(Favourites(), count=2, left_out=0)
+        selected = AddAllFavouritesDialog(
+            Favourites(), count=2, left_out=0, is_selected=True
+        )
+
+        assert all_of_them.windowTitle() == "Add All to Favourites"
+        assert selected.windowTitle() == "Add Selected to Favourites"
+
     def test_a_folder_picked_or_made(self, monkeypatch):
         dialog = AddAllFavouritesDialog(_favourites(), count=3, left_out=0)
         _typed(monkeypatch, "This grid")

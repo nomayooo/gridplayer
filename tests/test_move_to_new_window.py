@@ -203,6 +203,110 @@ def _handed_over(started) -> tuple[Path, MovedCells]:
     return path, MovedCells.model_validate_json(path.read_bytes())
 
 
+def _shift_click(manager, block):
+    manager._ctx.active_block = block
+    manager.cmd_select_cell_range()
+
+
+def _ctrl_shift_click(manager, block):
+    manager._ctx.active_block = block
+    manager.cmd_add_cell_range()
+
+
+class TestAddingARange:
+    def test_the_others_picked_kept(self, manager, blocks):
+        blocks.extend([_block("d.mp4"), _block("e.mp4")])
+        _select(manager, blocks[4], blocks[1])
+
+        _ctrl_shift_click(manager, blocks[3])
+
+        assert [b.is_selected for b in blocks] == [False, True, True, True, True]
+
+    def test_from_the_same_one_after_a_shift_click(self, manager, blocks):
+        blocks.extend([_block("d.mp4"), _block("e.mp4")])
+        _select(manager, blocks[2])
+        _shift_click(manager, blocks[3])
+
+        _ctrl_shift_click(manager, blocks[0])
+
+        assert [b.is_selected for b in blocks] == [True, True, True, True, False]
+
+    def test_with_none_picked_this_one_alone(self, manager, blocks):
+        _ctrl_shift_click(manager, blocks[1])
+
+        assert [b.is_selected for b in blocks] == [False, True, False]
+
+
+class TestPickingARange:
+    def test_from_the_one_picked_last_up_to_here(self, manager, blocks):
+        blocks.append(_block("d.mp4"))
+        _select(manager, blocks[0])
+
+        _shift_click(manager, blocks[2])
+
+        assert [b.is_selected for b in blocks] == [True, True, True, False]
+
+    def test_backwards_too(self, manager, blocks):
+        _select(manager, blocks[2])
+
+        _shift_click(manager, blocks[0])
+
+        assert [b.is_selected for b in blocks] == [True, True, True]
+
+    def test_ones_picked_outside_it_let_go(self, manager, blocks):
+        blocks.append(_block("d.mp4"))
+        _select(manager, blocks[3], blocks[0])
+
+        _shift_click(manager, blocks[1])
+
+        assert [b.is_selected for b in blocks] == [True, True, False, False]
+        assert manager._selected == [blocks[0].id, blocks[1].id]
+
+    def test_clicked_again_nearer_shrinks_it(self, manager, blocks):
+        blocks.append(_block("d.mp4"))
+        _select(manager, blocks[0])
+        _shift_click(manager, blocks[3])
+
+        _shift_click(manager, blocks[1])
+
+        assert [b.is_selected for b in blocks] == [True, True, False, False]
+
+    def test_clicked_again_past_the_start_turns_round(self, manager, blocks):
+        blocks.append(_block("d.mp4"))
+        _select(manager, blocks[1])
+        _shift_click(manager, blocks[3])
+
+        _shift_click(manager, blocks[0])
+
+        assert [b.is_selected for b in blocks] == [True, True, False, False]
+
+    def test_with_none_picked_this_one_alone(self, manager, blocks):
+        _shift_click(manager, blocks[1])
+
+        assert [b.is_selected for b in blocks] == [False, True, False]
+
+        _shift_click(manager, blocks[2])
+
+        assert [b.is_selected for b in blocks] == [False, True, True]
+
+    def test_from_nothing_after_clearing(self, manager, blocks):
+        _select(manager, blocks[0])
+        manager.cmd_clear_cell_selection()
+
+        _shift_click(manager, blocks[2])
+
+        assert [b.is_selected for b in blocks] == [False, False, True]
+
+    def test_from_nothing_once_the_one_picked_last_is_gone(self, manager, blocks):
+        _select(manager, blocks[0])
+        blocks.pop(0)
+        manager.forget_cells_gone()
+
+        _shift_click(manager, blocks[1])
+
+        assert [b.is_selected for b in blocks] == [False, True]
+
+
 class TestMovingOut:
     def test_the_ones_picked_in_the_grids_order(self, manager, blocks, started):
         _select(manager, blocks[2], blocks[1])
