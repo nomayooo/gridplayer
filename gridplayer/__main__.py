@@ -39,6 +39,10 @@ def main():
 
 
 def exit_if_delegated():
+    # a new window asked for, not more files for the window already open
+    if env.MOVED_CELLS_FILE is not None:
+        return
+
     if Settings().get("player/one_instance") and is_delegated_to_primary(sys.argv):
         sys.exit(0)
 

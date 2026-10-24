@@ -71,6 +71,10 @@ RESOURCES_DIR = _resolve_resources_dir()
 VLC_VERSION = None
 VLC_PYTHON_VERSION = None
 
+# the cells another player moved into this one, a new window of its own; see
+# player.managers.new_window. --moved-cells on the command line sets it
+MOVED_CELLS_FILE: Path | None = None
+
 if IS_FLATPAK:
     FLATPAK_RUNTIME_DIR = (
         Path(os.environ["XDG_RUNTIME_DIR"])

@@ -170,6 +170,7 @@ class VideoBlock(QWidget):
     info_change = pyqtSignal(str)
     is_in_progress_change = pyqtSignal()
     is_active_change = pyqtSignal(bool)
+    is_selected_change = pyqtSignal(bool)
     is_audio_present_change = pyqtSignal(bool)
 
     def __init__(self, video_driver, context, **kwargs):
@@ -188,6 +189,8 @@ class VideoBlock(QWidget):
         # Runtime Params
         self._is_error = False
         self._is_active = False
+        # picked out with others, to be moved to a new window with them
+        self._is_selected = False
         self._is_closing = False
         self._drop_indicator = DropIndicator.NONE
 
@@ -471,6 +474,7 @@ class VideoBlock(QWidget):
             (self.is_muted_change, overlay.set_is_muted),
             (self.info_change, overlay.set_info_label),
             (self.is_active_change, overlay.set_is_active),
+            (self.is_selected_change, overlay.set_is_selected),
             (self.is_audio_present_change, overlay.set_volume_button_visible),
         )
 
@@ -806,6 +810,18 @@ class VideoBlock(QWidget):
             return
 
         self.is_active_change.emit(is_active)
+
+    @property
+    def is_selected(self) -> bool:
+        return self._is_selected
+
+    @is_selected.setter
+    def is_selected(self, is_selected: bool):
+        if is_selected == self._is_selected:
+            return
+
+        self._is_selected = is_selected
+        self.is_selected_change.emit(is_selected)
 
     def refresh_overlay_border(self):
         self.is_active_change.emit(self.is_active_shown)

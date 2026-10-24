@@ -71,6 +71,9 @@ class PlaylistManager(ManagerBase):
 
         self._saved_playlist_path: Path | None = None
         self._saved_playlist_state: tuple | None = None
+        # cells moved into a new window: closed without asking, and not the
+        # playlist to open next time, until it is saved or another opened
+        self._is_scratch = False
 
         self._title_timer = QTimer(self)
         self._title_timer.setInterval(_TITLE_REFRESH_MS)
@@ -102,7 +105,11 @@ class PlaylistManager(ManagerBase):
             "toggle_shuffle_on_load": self.toggle_shuffle_on_load,
             "playlist_settings": self.cmd_playlist_settings,
             "remember_last_playlist": self.remember_last_playlist,
+            "set_playlist_scratch": self.set_playlist_scratch,
         }
+
+    def set_playlist_scratch(self) -> None:
+        self._is_scratch = True
 
     def remember_last_playlist(self) -> None:
         """Keep the playlist file that is open as the player closes.
@@ -110,6 +117,11 @@ class PlaylistManager(ManagerBase):
         Synced here because the player ends with os._exit, which leaves
         nothing to write what QSettings still has pending.
         """
+
+        # the window cells were moved into leaves the one they came from to
+        # say what opens next time
+        if self._is_scratch:
+            return
 
         path = self._saved_playlist_path
 
@@ -252,6 +264,9 @@ class PlaylistManager(ManagerBase):
 
         self.cmd_force_close_playlist()
 
+        # what is made in the window from now on is asked about as anywhere
+        self._is_scratch = False
+
         return True
 
     def cmd_force_close_playlist(self) -> None:
@@ -392,7 +407,7 @@ class PlaylistManager(ManagerBase):
         return True
 
     def check_playlist_save(self) -> bool:
-        if not self._is_playlist_changed():
+        if not self._is_playlist_changed() or self._is_scratch:
             return True
 
         mode = PlaylistSettings().get("playlist/unsaved_changes")
@@ -601,6 +616,9 @@ class PlaylistManager(ManagerBase):
             )
 
     def _set_saved_playlist(self, path: Path | None) -> None:
+        if path is not None:
+            self._is_scratch = False
+
         self._saved_playlist_path = path
         self._saved_playlist_state = _held_lightly(self._playlist_state())
 

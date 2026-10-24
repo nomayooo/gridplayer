@@ -785,6 +785,44 @@ def test_check_playlist_save_prompts_dirty_empty_template(mocker):
     question.assert_called_once()
 
 
+class TestScratch:
+    """A window cells were moved into: closed without asking, until saved."""
+
+    @pytest.fixture
+    def manager(self, mocker):
+        manager, parent = _make_manager(SimpleNamespace(video_blocks=[]))
+        manager.set_playlist_scratch()
+        mocker.patch.object(manager, "_is_playlist_changed", return_value=True)
+        manager.question = mocker.patch(
+            "gridplayer.player.managers.playlist.QCustomMessageBox.cancellable_question",
+            return_value=QMessageBox.Discard,
+        )
+        yield manager
+        parent.deleteLater()
+
+    def test_closed_without_asking(self, manager):
+        assert manager.check_playlist_save() is True
+        manager.question.assert_not_called()
+
+    def test_asked_about_once_saved(self, manager, mocker):
+        mocker.patch.object(manager, "_playlist_state")
+        mocker.patch("gridplayer.player.managers.playlist._held_lightly")
+
+        manager._set_saved_playlist(Path("kept.gpls"))
+
+        manager.check_playlist_save()
+
+        manager.question.assert_called_once()
+
+    def test_asked_about_once_closed_for_another(self, manager, mocker):
+        mocker.patch.object(manager, "cmd_force_close_playlist")
+
+        manager.cmd_close_playlist()
+        manager.check_playlist_save()
+
+        manager.question.assert_called_once()
+
+
 def test_check_playlist_save_discard_mode_skips_prompt(mocker):
     manager, _parent = _make_manager(SimpleNamespace(video_blocks=[]))
     manager._saved_playlist_path = Path("x.gpls")
@@ -1715,6 +1753,14 @@ class TestLastPlaylist:
 
         assert settings["last_playlist"] == ""
         Settings().sync.assert_called_once()
+
+    def test_cells_moved_into_a_new_window_leave_it_alone(self, manager, settings):
+        settings["last_playlist"] = "before.gpls"
+        manager.set_playlist_scratch()
+
+        manager.remember_last_playlist()
+
+        assert settings["last_playlist"] == "before.gpls"
 
     def test_flag_off_forgets_it(self, manager, settings, tmp_path):
         settings["player/reopen_last_playlist"] = False

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QWidget
 
@@ -19,6 +21,7 @@ from gridplayer.player.managers.macos_fileopen import MacOSFileOpenManager
 from gridplayer.player.managers.media_session import MediaSessionManager
 from gridplayer.player.managers.menu import MenuManager
 from gridplayer.player.managers.mouse_hide import MouseHideManager
+from gridplayer.player.managers.new_window import NewWindowManager
 from gridplayer.player.managers.pan import PanManager
 from gridplayer.player.managers.playlist import PlaylistManager
 from gridplayer.player.managers.recent_list import RecentListManager
@@ -38,6 +41,7 @@ from gridplayer.player.managers.zoom_select import ZoomSelectManager
 class Player(QWidget, ManagersManager):
     arguments_received = pyqtSignal(list)
     restore_requested = pyqtSignal()
+    moved_cells_received = pyqtSignal(Path)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -68,6 +72,7 @@ class Player(QWidget, ManagersManager):
             "add_videos": AddVideosManager,
             "recent_list": RecentListManager,
             "favourites": FavouritesManager,
+            "new_window": NewWindowManager,
             "dialogs": DialogsManager,
             "settings": SettingsManager,
             "actions": ActionsManager,
@@ -249,6 +254,12 @@ class Player(QWidget, ManagersManager):
                 ("playlist_opened", "playlist.load_playlist_file"),
                 ("error", "dialogs.error"),
             ],
+            "new_window": [
+                ("s.moved_cells_received", "open_moved_cells"),
+                ("cells_moved_in", "grid.add_videos_to_layout"),
+                ("video_blocks.video_count_changed", "forget_cells_gone"),
+                ("error", "dialogs.error"),
+            ],
             "tray": [
                 ("settings.tray_settings_changed", "apply_settings"),
                 # whether the taskbar button can go depends on the icon
@@ -304,3 +315,6 @@ class Player(QWidget, ManagersManager):
 
     def restore_last_playlist(self):
         self.restore_requested.emit()
+
+    def open_moved_cells(self, moved_cells_file: Path):
+        self.moved_cells_received.emit(moved_cells_file)

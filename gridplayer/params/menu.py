@@ -377,6 +377,11 @@ SECTIONS = MappingProxyType(
                 "---",
                 "On Network Error Attempts: %v",
             ),
+            "---",
+            "Select",
+            "Clear Selection",
+            "Move to New Window",
+            "---",
             "Close",
         ],
         "video_all": [

@@ -1,9 +1,11 @@
 import argparse
 import os
 import sys
+from pathlib import Path
 
 from gridplayer.params import env
 from gridplayer.utils.app_dir import ENV_USER_DATA_DIR
+from gridplayer.utils.new_window import MOVED_CELLS_ARG
 from gridplayer.version import __app_name__, __version__
 
 QT_PLATFORMS = ("auto", "xcb", "wayland")
@@ -43,6 +45,8 @@ def init_cli_args(argv=None):
             help="display server to run on: auto picks xcb (X11 or Xwayland)"
             " when there is one, wayland otherwise; hardware video needs xcb",
         )
+    # not for people: how a player hands cells to the new window it opens
+    parser.add_argument(MOVED_CELLS_ARG, metavar="PATH", help=argparse.SUPPRESS)
     parser.add_argument(
         "--version",
         action="version",
@@ -64,6 +68,9 @@ def init_cli_args(argv=None):
 
     if args.user_data_dir.strip():
         os.environ[ENV_USER_DATA_DIR] = args.user_data_dir.strip()
+
+    if args.moved_cells:
+        env.MOVED_CELLS_FILE = Path(args.moved_cells)
 
     if getattr(args, "platform", "auto") != "auto":
         env.QT_PLATFORM = args.platform
