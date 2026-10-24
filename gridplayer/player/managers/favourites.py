@@ -143,6 +143,7 @@ class FavouritesManager(ManagerBase):
             name=name,
             loops=len(params.loops),
             loop_start=params.loop_start,
+            position=params.current_position,
             folder=folder,
             is_kept=kept is not None,
         )
@@ -196,8 +197,9 @@ class FavouritesManager(ManagerBase):
 
 
 def _favourite_of(block, name: str | None = None) -> FavouriteVideo:
-    """The video a cell plays, as a favourite: its file, its loops, under
-    the name given, else the one the cell shows, else the file's."""
+    """The video a cell plays, as a favourite: its file, its loops, where
+    it is in it, under the name given, else the one the cell shows, else
+    the file's."""
 
     params = block.video_params
 
@@ -206,4 +208,7 @@ def _favourite_of(block, name: str | None = None) -> FavouriteVideo:
         path=params.uri,
         loops=list(params.loops),
         loop_start=params.loop_start,
+        position=params.current_position,
+        loop_index=params.loop_index,
+        is_outside_loops=params.is_outside_loops,
     )

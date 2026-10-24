@@ -35,9 +35,13 @@ NEW = HERE.parent / "conftest.py"
 GONE = HERE.parent / "no such video.mp4"
 
 
-def _video(name="Clip", path=HERE, loops=(), loop_start=None):
+def _video(name="Clip", path=HERE, loops=(), loop_start=None, position=None):
     return FavouriteVideo(
-        name=name, path=path, loops=list(loops), loop_start=loop_start
+        name=name,
+        path=path,
+        loops=list(loops),
+        loop_start=loop_start,
+        position=position,
     )
 
 
@@ -76,6 +80,8 @@ class TestTheModel:
         )
 
         assert read.root[0].loop_start is None
+        assert read.root[0].position is None
+        assert (read.root[0].loop_index, read.root[0].is_outside_loops) == (0, False)
 
     def test_a_folder_by_where_it_is(self):
         favourites = _favourites()
@@ -273,6 +279,36 @@ class TestIntoTheGrid:
         assert video.loop_start == 5000
         assert video.current_position == 5000
 
+    def test_at_where_it_was_kept_at(self, adder):
+        adder.add_favourite_videos(
+            [
+                _video(
+                    loops=[(1000, 2000), (5000, 6000)],
+                    loop_start=9000,
+                    position=5500,
+                ),
+                FavouriteVideo(
+                    name="Outside",
+                    path=HERE,
+                    loops=[(1000, 2000), (5000, 6000)],
+                    position=3000,
+                    loop_index=1,
+                    is_outside_loops=True,
+                ),
+            ]
+        )
+
+        ((begun, outside),) = adder.added
+        assert begun.current_position == 5500
+        assert (outside.current_position, outside.loop_index) == (3000, 1)
+        assert outside.is_outside_loops
+
+    def test_one_kept_before_positions_were_opens_as_before(self, adder):
+        adder.add_favourite_videos([_video()])
+
+        ((video,),) = adder.added
+        assert video.current_position == 0
+
     def test_a_file_gone_is_said_and_the_rest_opened(self, adder):
         adder.add_favourite_videos([_video(path=GONE), _video()])
 
@@ -287,11 +323,26 @@ class TestIntoTheGrid:
         adder._ctx.commands.add_recent_uris.assert_not_called()
 
 
-def _block(uri=NEW, title="Shown title", loops=(), loop_start=None):
+def _block(
+    uri=NEW,
+    title="Shown title",
+    loops=(),
+    loop_start=None,
+    position=0,
+    loop_index=0,
+    is_outside_loops=False,
+):
     return SimpleNamespace(
         is_local_file=isinstance(uri, Path),
         title=title,
-        video_params=SimpleNamespace(uri=uri, loops=list(loops), loop_start=loop_start),
+        video_params=SimpleNamespace(
+            uri=uri,
+            loops=list(loops),
+            loop_start=loop_start,
+            current_position=position,
+            loop_index=loop_index,
+            is_outside_loops=is_outside_loops,
+        ),
     )
 
 
@@ -307,7 +358,9 @@ class TestMakingOne:
         assert asked.call_args.kwargs["name"] == "Shown title"
         assert asked.call_args.kwargs["loops"] == 1
         added = stored["favourites"].items_at((1, 1))[-1]
-        assert added == FavouriteVideo(name="My clip", path=NEW, loops=[(500, 900)])
+        assert added == FavouriteVideo(
+            name="My clip", path=NEW, loops=[(500, 900)], position=0
+        )
 
     def test_a_loop_begun_and_not_finished_kept_too(self, stored, monkeypatch):
         asked = Mock(return_value=(stored["favourites"], (), "Begun"))
@@ -319,6 +372,23 @@ class TestMakingOne:
         assert asked.call_args.kwargs["loop_start"] == 12_000
         added = stored["favourites"].root[-1]
         assert (added.loops, added.loop_start) == ([], 12_000)
+
+    def test_where_it_is_kept_with_it(self, stored, monkeypatch):
+        asked = Mock(return_value=(stored["favourites"], (), "Here"))
+        monkeypatch.setattr(manager_module.AddFavouriteDialog, "ask", asked)
+        block = _block(
+            loops=[(1, 2), (5, 9)], position=83_456, loop_index=1, is_outside_loops=True
+        )
+
+        _manager(active=block).cmd_add_to_favourites()
+
+        assert asked.call_args.kwargs["position"] == 83_456
+        added = stored["favourites"].root[-1]
+        assert (added.position, added.loop_index, added.is_outside_loops) == (
+            83_456,
+            1,
+            True,
+        )
 
     def test_named_after_the_file_without_a_title(self, stored, monkeypatch):
         asked = Mock(return_value=None)
@@ -374,7 +444,7 @@ class TestMakingOne:
         _manager(active=_block(loops=[(1, 2)])).cmd_add_to_favourites()
 
         assert stored["favourites"].items_at((1,)) == [
-            FavouriteVideo(name="New name", path=NEW, loops=[(1, 2)])
+            FavouriteVideo(name="New name", path=NEW, loops=[(1, 2)], position=0)
         ]
 
     def test_nothing_kept_when_thought_better_of(self, stored, monkeypatch):
@@ -449,8 +519,8 @@ class TestMakingAll:
         _grid_of(first, second).cmd_add_all_to_favourites()
 
         assert stored["favourites"].items_at((0,)) == [
-            FavouriteVideo(name="First", path=NEW, loops=[(1, 2)]),
-            FavouriteVideo(name=HERE.stem, path=HERE, loop_start=500),
+            FavouriteVideo(name="First", path=NEW, loops=[(1, 2)], position=0),
+            FavouriteVideo(name=HERE.stem, path=HERE, loop_start=500, position=0),
         ]
         assert (
             asked.call_args.kwargs["count"],
@@ -591,6 +661,15 @@ class TestTheAddWindow:
         assert "3" in dialog.loops_note.text()
         assert dialog.loop_start_note.isHidden()
 
+    def test_where_it_opens_is_said(self):
+        dialog = AddFavouriteDialog(Favourites(), name="C", loops=0, position=83_456)
+
+        assert not dialog.position_note.isHidden()
+        assert "1:23.456" in dialog.position_note.text()
+        assert AddFavouriteDialog(
+            Favourites(), name="C", loops=0
+        ).position_note.isHidden()
+
     def test_a_loop_begun_is_said(self):
         dialog = AddFavouriteDialog(Favourites(), name="C", loops=0, loop_start=12_000)
 
@@ -611,6 +690,17 @@ def _tree_item(dialog, *path):
 class TestTheManageWindow:
     def test_as_it_was_given_back_untouched(self):
         assert ManageFavouritesDialog(_favourites()).favourites() == _favourites()
+
+    def test_where_each_opens_is_shown(self):
+        favourites = Favourites([_video("At"), _video("Never")])
+        favourites.root[0].position = 83_456
+
+        dialog = ManageFavouritesDialog(favourites)
+
+        assert _tree_item(dialog, 0).text(2) == "1:23.456"
+        assert _tree_item(dialog, 1).text(2) == ""
+        assert _tree_item(dialog, 0).text(3) == str(HERE)
+        assert dialog.favourites() == favourites
 
     def test_loops_and_a_loop_begun_are_shown(self):
         dialog = ManageFavouritesDialog(_favourites())

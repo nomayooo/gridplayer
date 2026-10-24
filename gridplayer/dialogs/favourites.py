@@ -131,6 +131,7 @@ class AddFavouriteDialog(_InFolderDialog):
         loop_start: int | None = None,
         folder: FolderPath = (),
         is_kept: bool = False,
+        position: int | None = None,
         **kwargs,
     ):
         super().__init__(favourites, **kwargs)
@@ -159,6 +160,16 @@ class AddFavouriteDialog(_InFolderDialog):
                 )
             )
 
+        # where it opens, as it is now
+        self.position_note = QLabel(self)
+        self.position_note.setVisible(position is not None)
+        if position is not None:
+            self.position_note.setText(
+                translate("Favourites", "Opens at {TIME}").format(
+                    TIME=ms_time_txt(position, strip=True)
+                )
+            )
+
         # a favourite already, which this one takes the place of
         self.kept_note = QLabel(
             translate("Favourites", "Already in your favourites: this replaces it."),
@@ -176,6 +187,7 @@ class AddFavouriteDialog(_InFolderDialog):
 
         layout = QVBoxLayout(self)
         layout.addLayout(form)
+        layout.addWidget(self.position_note)
         layout.addWidget(self.loops_note)
         layout.addWidget(self.loop_start_note)
         layout.addWidget(self.kept_note)
@@ -193,6 +205,7 @@ class AddFavouriteDialog(_InFolderDialog):
         loop_start: int | None = None,
         folder: FolderPath = (),
         is_kept: bool = False,
+        position: int | None = None,
     ):
         """(the favourites with any folders made, the folder picked, the
         name given), None for the viewer thinking better of it."""
@@ -204,6 +217,7 @@ class AddFavouriteDialog(_InFolderDialog):
             loop_start=loop_start,
             folder=folder,
             is_kept=is_kept,
+            position=position,
             parent=parent,
         )
 
@@ -282,11 +296,12 @@ class ManageFavouritesDialog(QDialog):
         self.resize(640, 420)
 
         self.tree = QTreeWidget(self)
-        self.tree.setColumnCount(3)
+        self.tree.setColumnCount(4)
         self.tree.setHeaderLabels(
             [
                 translate("Favourites", "Name"),
                 translate("Favourites", "A-B Loops"),
+                translate("Favourites", "Opens At"),
                 translate("Favourites", "File"),
             ]
         )
@@ -349,7 +364,7 @@ class ManageFavouritesDialog(QDialog):
                 parent_item.addChild(self._video_item(item))
 
     def _folder_item(self, name: str) -> QTreeWidgetItem:
-        tree_item = QTreeWidgetItem([name, "", ""])
+        tree_item = QTreeWidgetItem([name, "", "", ""])
         tree_item.setIcon(0, QIcon.fromTheme("favourites-folder"))
         tree_item.setFlags(
             Qt.ItemIsEnabled
@@ -365,9 +380,15 @@ class ManageFavouritesDialog(QDialog):
         if video.loop_start is not None:
             loops.append(_loop_start_txt(video.loop_start))
 
-        tree_item = QTreeWidgetItem([video.name, ", ".join(loops), str(video.path)])
+        opens_at = (
+            "" if video.position is None else ms_time_txt(video.position, strip=True)
+        )
+
+        tree_item = QTreeWidgetItem(
+            [video.name, ", ".join(loops), opens_at, str(video.path)]
+        )
         tree_item.setIcon(0, QIcon.fromTheme("add-files"))
-        tree_item.setToolTip(2, str(video.path))
+        tree_item.setToolTip(3, str(video.path))
         tree_item.setData(0, ITEM_FAVOURITE, video)
         # nothing is dropped into a video, only next to it
         tree_item.setFlags(
