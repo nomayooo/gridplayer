@@ -39,6 +39,7 @@ class FavouritesManager(ManagerBase):
             "open_favourites_folder": self.cmd_open_favourites_folder,
             "is_favourites_folder_full": self.is_favourites_folder_full,
             "is_any_favourites": self.is_any_favourites,
+            "is_any_to_favourite": self.is_any_to_favourite,
         }
 
     @property
@@ -122,7 +123,29 @@ class FavouritesManager(ManagerBase):
 
     # making and keeping them
 
+    def is_any_to_favourite(self) -> bool:
+        """A file to make a favourite: among the cells picked out, if any
+        are, else the active one."""
+
+        selected = self._ctx.commands.selected_cells()
+
+        if selected:
+            return any(block.is_local_file for block in selected)
+
+        block = self._ctx.active_block
+
+        return block is not None and block.is_local_file
+
     def cmd_add_to_favourites(self) -> None:
+        """The active video made a favourite; or the cells picked out
+        (Ctrl+Click), if any are, all at once into a folder, as Add All."""
+
+        selected = self._ctx.commands.selected_cells()
+
+        if selected:
+            self._add_many(selected, is_selected=True)
+            return
+
         block = self._ctx.active_block
 
         if block is None or not block.is_local_file:
@@ -165,6 +188,10 @@ class FavouritesManager(ManagerBase):
         blocks = self._ctx.video_blocks.blocks_for_ids(
             self._ctx.commands.layout_order()
         )
+
+        self._add_many(blocks)
+
+    def _add_many(self, blocks: list, is_selected: bool = False) -> None:
         files = [block for block in blocks if block.is_local_file]
 
         if not files:
@@ -175,6 +202,7 @@ class FavouritesManager(ManagerBase):
             favourites=self.favourites,
             count=len(files),
             left_out=len(blocks) - len(files),
+            is_selected=is_selected,
         )
 
         if added is None:

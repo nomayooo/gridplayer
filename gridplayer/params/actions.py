@@ -1550,6 +1550,13 @@ ACTIONS = MappingProxyType(
             "toggle": "is_active_cell_selected",
             "func": "toggle_cell_selected",
         },
+        "Select Up to Here": {
+            "title": translate("Actions", "Select Up to Here"),
+            "keys": ["Shift+Click"],
+            "icon": "checkmark",
+            "func": "select_cell_range",
+            "show_if": "is_any_cells_selected",
+        },
         "Clear Selection": {
             "title": translate("Actions", "Clear Selection"),
             "icon": "cross",
@@ -2855,10 +2862,14 @@ ACTIONS = MappingProxyType(
             "show_if": "is_recent_list_enabled",
         },
         "Add to Favourites": {
-            "title": translate("Favourites", "Add to Favourites..."),
+            "title": (
+                translate("Favourites", "Add to Favourites..."),
+                translate("Favourites", "Add Selected to Favourites..."),
+            ),
             "icon": "favourite-add",
+            "toggle": "is_any_cells_selected",
             "func": "add_to_favourites",
-            "enable_if": "is_active_local_file",
+            "enable_if": "is_any_to_favourite",
         },
         "Add All to Favourites": {
             "title": translate("Favourites", "Add All to Favourites..."),

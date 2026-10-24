@@ -380,6 +380,7 @@ SECTIONS = MappingProxyType(
             ),
             "---",
             "Select",
+            "Select Up to Here",
             "Clear Selection",
             "Move to New Window",
             "---",

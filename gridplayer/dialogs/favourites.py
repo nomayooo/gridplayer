@@ -235,13 +235,23 @@ class AddFavouriteDialog(_InFolderDialog):
 
 
 class AddAllFavouritesDialog(_InFolderDialog):
-    """All the videos open made favourites, each under its own name, in a
-    folder of the viewer's picking."""
+    """All the videos open, or those picked out, made favourites, each under
+    its own name, in a folder of the viewer's picking."""
 
-    def __init__(self, favourites: Favourites, count: int, left_out: int, **kwargs):
+    def __init__(
+        self,
+        favourites: Favourites,
+        count: int,
+        left_out: int,
+        is_selected: bool = False,
+        **kwargs,
+    ):
         super().__init__(favourites, **kwargs)
 
-        self.setWindowTitle(translate("Favourites", "Add All to Favourites"))
+        if is_selected:
+            self.setWindowTitle(translate("Favourites", "Add Selected to Favourites"))
+        else:
+            self.setWindowTitle(translate("Favourites", "Add All to Favourites"))
 
         self.count_note = QLabel(
             translate(
@@ -273,12 +283,23 @@ class AddAllFavouritesDialog(_InFolderDialog):
         self.fill_folders()
 
     @classmethod
-    def ask(cls, parent, favourites: Favourites, count: int, left_out: int):
+    def ask(
+        cls,
+        parent,
+        favourites: Favourites,
+        count: int,
+        left_out: int,
+        is_selected: bool = False,
+    ):
         """(the favourites with any folders made, the folder picked), None
         for the viewer thinking better of it."""
 
         dialog = cls(
-            favourites=favourites, count=count, left_out=left_out, parent=parent
+            favourites=favourites,
+            count=count,
+            left_out=left_out,
+            is_selected=is_selected,
+            parent=parent,
         )
 
         if not dialog.exec():
