@@ -93,6 +93,11 @@ class FloatSpinField(_NumberField):
 
 
 @dataclass(frozen=True, kw_only=True)
+class PercentField(SettingField):
+    """A share from 0 to 1, as it is stored, shown as a whole 0 to 100%."""
+
+
+@dataclass(frozen=True, kw_only=True)
 class CropField(SettingField):
     pass
 

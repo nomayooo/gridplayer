@@ -162,7 +162,7 @@ _default_settings = {
     "video_defaults/subtitle_encoding": DEFAULT_ENCODING,
     "video_defaults/external_subtitle_autodiscover": False,
     "video_defaults/random_loop": False,
-    "video_defaults/muted": True,
+    "video_defaults/muted": False,
     "video_defaults/initial_state": VideoInitialState.PLAYING,
     "video_defaults/rate": 1.0,
     "video_defaults/scale": 1.0,
