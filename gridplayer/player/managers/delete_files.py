@@ -2,10 +2,11 @@
 picked cells' (Ctrl+Click), or else the active one's, once asked, and not
 moved to the trash.
 
-Each cell showing one is closed first, for its player to let go of it: a
-file a player has open cannot be deleted on Windows. Its player may take a
-moment to, so a file still held is tried again for a while before giving
-up on it.
+Each cell showing one is closed first, for its player to let go of it, and
+the seek preview made to let go of it too: a file a player has open cannot
+be deleted on Windows, or is deleted only in name, its space freed once the
+last to have it open lets go. A player may take a moment to, so a file
+still held is tried again for a while before giving up on it.
 """
 
 from pathlib import Path
@@ -79,6 +80,7 @@ class DeleteFilesManager(ManagerBase):
                 block.close()
 
         for path in files:
+            self._ctx.seek_preview.let_go_of(path)
             self._pending[path] = RETRY_TIMES
 
         self._delete_pending()

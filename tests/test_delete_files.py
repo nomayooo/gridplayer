@@ -44,7 +44,10 @@ def manager(blocks, selected):
     commands.selected_cells = lambda: list(selected)
 
     ctx = SimpleNamespace(
-        active_block=blocks[0], video_blocks=list(blocks), commands=commands
+        active_block=blocks[0],
+        video_blocks=list(blocks),
+        commands=commands,
+        seek_preview=Mock(),
     )
 
     manager = DeleteFilesManager(context=ctx)
@@ -77,6 +80,17 @@ class TestWhich:
         blocks[0].close.assert_called_once_with()
         blocks[1].close.assert_not_called()
         assert answered.questions == ['Permanently delete "a.mp4"?']
+
+    def test_let_go_of_by_the_seek_preview_first(self, manager, files, answered):
+        let_go = []
+        manager._ctx.seek_preview.let_go_of.side_effect = lambda path: let_go.append(
+            (path, path.exists())
+        )
+
+        manager.cmd_delete_files()
+
+        assert let_go == [(files[0], True)]
+        assert not files[0].exists()
 
     def test_the_picked_ones_over_the_active_one(
         self, manager, blocks, files, selected, answered

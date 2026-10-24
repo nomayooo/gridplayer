@@ -95,6 +95,23 @@ class SeekPreviewer(QObject):
         with self._lock:
             self._sent_path = path
 
+    def let_go_of(self, path: Path):
+        """The file let go of now, to be deleted: the process, which keeps the
+        last file it read open a while, closed if that may be this one, and
+        started again when next asked. Its frames are forgotten too."""
+
+        for key in [key for key in self._frames if key[0] == path]:
+            del self._frames[key]
+
+        with self._lock:
+            is_held = self._process is not None and self._sent_path == path
+
+        if is_held:
+            self.close()
+
+            with self._lock:
+                self._sent_path = None
+
     def close(self):
         self._receiver = None
 
