@@ -1531,6 +1531,24 @@ ACTIONS = MappingProxyType(
                 ),
             ),
         },
+        "Select": {
+            "title": (translate("Actions", "Select"), translate("Actions", "Deselect")),
+            "keys": ["Ctrl+Click"],
+            "icon": "checkmark",
+            "toggle": "is_active_cell_selected",
+            "func": "toggle_cell_selected",
+        },
+        "Clear Selection": {
+            "title": translate("Actions", "Clear Selection"),
+            "icon": "cross",
+            "show_if": "is_any_cells_selected",
+            "func": "clear_cell_selection",
+        },
+        "Move to New Window": {
+            "title": translate("Actions", "Move to New Window"),
+            "icon": "open-in-browser",
+            "func": "move_to_new_window",
+        },
         "Close": {
             "title": translate("Actions", "Close"),
             "key": "Ctrl+F4",

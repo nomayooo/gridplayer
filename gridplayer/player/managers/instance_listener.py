@@ -1,5 +1,6 @@
 from PyQt5.QtCore import QTimer, pyqtSignal
 
+from gridplayer.params import env
 from gridplayer.player.managers.base import ManagerBase
 from gridplayer.settings import Settings
 from gridplayer.utils.qt import qt_connect
@@ -22,6 +23,11 @@ class InstanceListenerManager(ManagerBase):
 
     def init(self):
         if not Settings().get("player/one_instance"):
+            return
+
+        # a window cells were moved into: the files sent to the player go to
+        # the one it came from, which is listening already
+        if env.MOVED_CELLS_FILE is not None:
             return
 
         QTimer.singleShot(0, self._instance_listener.start)

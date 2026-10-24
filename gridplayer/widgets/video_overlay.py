@@ -42,6 +42,7 @@ from gridplayer.widgets.video_overlay_elements import (
     OverlayLabel,
     OverlayListWindowTag,
     OverlayProgressBar,
+    OverlaySelectionMark,
     OverlayShortLabel,
     OverlayShortLabelFloating,
     OverlayVolumeBar,
@@ -218,6 +219,9 @@ class OverlayBlock(QWidget):
         self.border_widget = OverlayBorder(parent=self)
         self.border_widget.hide()
 
+        self.selection_mark = OverlaySelectionMark(parent=self)
+        self.selection_mark.hide()
+
         layout_control = QVBoxLayout(self.control_widget)
         layout_control.setContentsMargins(
             CONTROL_MARGIN, CONTROL_MARGIN, CONTROL_MARGIN, CONTROL_MARGIN
@@ -231,6 +235,7 @@ class OverlayBlock(QWidget):
 
         layout_main.addWidget(self.control_widget)
         layout_main.addWidget(self.border_widget)
+        layout_main.addWidget(self.selection_mark)
         layout_main.addWidget(self.drop_indicator)
         layout_main.addWidget(self.zoom_selection)
         layout_main.addWidget(self.zoom_hint)
@@ -574,6 +579,13 @@ class OverlayBlock(QWidget):
         self._sync_border()
         self.update()
 
+    @pyqtSlot(bool)
+    def set_is_selected(self, is_selected):
+        # shown all the time, not with the controls: what is picked stays
+        # picked while the mouse is elsewhere
+        self.selection_mark.setVisible(is_selected)
+        self.update()
+
     def set_is_chrome_visible(self, visible: bool):
         self._is_chrome_visible = visible
         self.control_widget.setVisible(visible)
@@ -758,6 +770,11 @@ class OverlayBlockFloating(OverlayBlock):
     @pyqtSlot(bool)
     def set_is_active(self, is_active):
         super().set_is_active(is_active)
+        self.refresh_opaque_mask()
+
+    @pyqtSlot(bool)
+    def set_is_selected(self, is_selected):
+        super().set_is_selected(is_selected)
         self.refresh_opaque_mask()
 
     def set_is_chrome_visible(self, visible: bool):

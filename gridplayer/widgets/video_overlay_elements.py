@@ -64,6 +64,9 @@ LOOP_MARK_WIDTH = 3
 OTHER_LOOP_MARK_COLOR = "#1e90ff"
 OTHER_LOOP_MARK_WIDTH = 2
 
+# the ring round a cell picked out with others, to be moved to a new window
+SELECTION_COLOR = "#2f80ed"
+
 # A chapter is marked the way mpv marks it: a wedge cut into the top and the
 # bottom edge of the bar, which leaves the middle of it to the loop marks'
 # full-height lines.
@@ -2288,6 +2291,28 @@ class OverlayBorder(OverlayWidget):
                 max(0, self.height() - inset * 2),
             )
         )
+
+
+class OverlaySelectionMark(OverlayBorder):
+    """A cell picked out with others, to be moved to a new window with
+    them: a ring round it, wider than the active cell's border, and in a
+    colour of its own rather than the video's, to tell the two apart."""
+
+    border_width = 4
+
+    @property
+    def color(self):
+        return QColor(SELECTION_COLOR)
+
+    @color.setter
+    def color(self, color):
+        # the video's colour, given to every part of the overlay: not this
+        self.update()
+
+    @property
+    def fill_color(self) -> QColor:
+        # all of it, not let through as the boxes are: seen over any picture
+        return self.color
 
 
 class OverlayZoomSelection(OverlayWidget):
