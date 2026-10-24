@@ -74,6 +74,45 @@ class Favourites(RootModel[list[FavouriteItem]]):
 
         self.items_at(folder).append(item)
 
+    def find_video(self, path: Path) -> tuple[FolderPath, FavouriteVideo] | None:
+        """The favourite of a file and the folder it is in, None for none."""
+
+        for folder, _ in self.folders():
+            for item in self.items_at(folder):
+                if isinstance(item, FavouriteVideo) and item.path == path:
+                    return folder, item
+
+        return None
+
+    def put_video(self, folder: FolderPath, video: FavouriteVideo) -> None:
+        """A favourite of a file put in a folder, in place of the one the
+        file had: where that one was when it was in the folder, else at the
+        end of it, the old one gone. A file is a favourite once."""
+
+        # the folder's own list, taken before any is taken out of it or
+        # before it: a folder is known by where it is, which that changes
+        target = self.items_at(folder)
+
+        lists = [self.items_at(path) for path, _ in self.folders()]
+
+        is_replaced = False
+
+        for items in lists:
+            for index in reversed(range(len(items))):
+                item = items[index]
+
+                if not isinstance(item, FavouriteVideo) or item.path != video.path:
+                    continue
+
+                if items is target and not is_replaced:
+                    items[index] = video
+                    is_replaced = True
+                else:
+                    del items[index]
+
+        if not is_replaced:
+            target.append(video)
+
     def folders(self) -> list[tuple[FolderPath, list[str]]]:
         """Every folder, the top first, each by where it is and the names
         down to it, in the order they are shown."""

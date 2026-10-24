@@ -1,6 +1,7 @@
 """A video with a loop made a favourite, kept, and opened again from the
 Favourites menu into a cell of its own beside it, its loop with it; then
-again with a loop begun and not finished, which it is opened with too."""
+again with a loop begun and not finished, which it is opened with too, saved
+over the favourite the file was already."""
 
 
 def _at(d, a, ms, what):
@@ -61,14 +62,19 @@ def scenario(d):
     loop_start = a.video_params.loop_start
     d.check("a loop begun", loop_start is not None, loop_start)
 
+    # the same file again: offered as the favourite it is, which it replaces
     def name_begun(window):
         d.check("offered with the loop begun", not window.loop_start_note.isHidden())
+        d.check("as the one kept", not window.kept_note.isHidden())
+        d.check("under its name", window.name.text() == "My clip", window.name.text())
         window.name.setText("Begun")
         window.accept()
 
     d.through_modal(lambda: d.act(a, "Add to Favourites"), "add begun", name_begun)
 
-    begun = Settings().get("favourites").root[-1]
+    kept = Settings().get("favourites").root
+    d.check("replaced, not added", len(kept) == 1, [f.name for f in kept])
+    begun = kept[-1]
     d.check(
         "the loop begun kept",
         (begun.loops, begun.loop_start) == (loops, loop_start),
