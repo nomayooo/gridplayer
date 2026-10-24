@@ -126,12 +126,20 @@ class FavouritesManager(ManagerBase):
         params = block.video_params
         favourites = self.favourites
 
+        # a favourite already: offered as it is, to be replaced
+        kept = favourites.find_video(params.uri)
+        folder, name = ((), block.title or Path(params.uri).stem)
+        if kept is not None:
+            folder, name = kept[0], kept[1].name
+
         added = AddFavouriteDialog.ask(
             parent=self.parent(),
             favourites=favourites,
-            name=block.title or Path(params.uri).stem,
+            name=name,
             loops=len(params.loops),
             loop_start=params.loop_start,
+            folder=folder,
+            is_kept=kept is not None,
         )
 
         if added is None:
@@ -139,7 +147,7 @@ class FavouritesManager(ManagerBase):
 
         favourites, folder, name = added
 
-        favourites.add(
+        favourites.put_video(
             folder,
             FavouriteVideo(
                 name=name,

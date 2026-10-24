@@ -26,6 +26,8 @@ from gridplayer.player.managers.add_videos import AddVideosManager
 from gridplayer.player.managers.favourites import FavouritesManager
 
 HERE = Path(__file__).resolve()
+# a file none of the favourites are of
+NEW = HERE.parent / "conftest.py"
 GONE = HERE.parent / "no such video.mp4"
 
 
@@ -99,6 +101,39 @@ class TestTheModel:
 
     def test_a_folders_videos_are_its_own_not_its_folders(self):
         assert [v.name for v in videos_in(_favourites().items_at((1,)))] == ["Song"]
+
+    def test_the_favourite_of_a_file_is_found(self):
+        folder, video = _favourites().find_video(HERE)
+
+        assert (folder, video.name) == ((), "Top")
+        assert _favourites().find_video(NEW) is None
+
+    def test_one_of_a_file_already_kept_is_replaced_where_it_is(self):
+        favourites = Favourites(
+            [_video("A", path=NEW), _video("Old"), _video("B", path=NEW.parent)]
+        )
+
+        favourites.put_video((), _video("New", loops=[(1, 2)]))
+
+        assert [i.name for i in favourites.root] == ["A", "New", "B"]
+        assert favourites.root[1].loops == [(1, 2)]
+
+    def test_one_kept_in_another_folder_is_moved_to_the_one_picked(self):
+        favourites = _favourites()
+
+        # HERE is the favourite of "Top" at the top, and in the folders too
+        favourites.put_video((1, 1), _video("New"))
+
+        assert [i.name for i in favourites.root] == ["Music", "Empty"]
+        assert [i.name for i in favourites.items_at((0,))] == ["Live"]
+        assert [i.name for i in favourites.items_at((0, 0))] == ["New"]
+
+    def test_a_file_not_kept_is_added_at_the_end(self):
+        favourites = _favourites()
+
+        favourites.put_video((2,), _video("New", path=NEW))
+
+        assert [i.name for i in favourites.items_at((2,))] == ["New"]
 
     def test_none_is_nothing(self):
         assert not Favourites()
@@ -248,7 +283,7 @@ class TestIntoTheGrid:
         adder._ctx.commands.add_recent_uris.assert_not_called()
 
 
-def _block(uri=HERE, title="Shown title", loops=(), loop_start=None):
+def _block(uri=NEW, title="Shown title", loops=(), loop_start=None):
     return SimpleNamespace(
         is_local_file=isinstance(uri, Path),
         title=title,
@@ -268,7 +303,7 @@ class TestMakingOne:
         assert asked.call_args.kwargs["name"] == "Shown title"
         assert asked.call_args.kwargs["loops"] == 1
         added = stored["favourites"].items_at((1, 1))[-1]
-        assert added == FavouriteVideo(name="My clip", path=HERE, loops=[(500, 900)])
+        assert added == FavouriteVideo(name="My clip", path=NEW, loops=[(500, 900)])
 
     def test_a_loop_begun_and_not_finished_kept_too(self, stored, monkeypatch):
         asked = Mock(return_value=(stored["favourites"], (), "Begun"))
@@ -287,7 +322,56 @@ class TestMakingOne:
 
         _manager(active=_block(title=None)).cmd_add_to_favourites()
 
-        assert asked.call_args.kwargs["name"] == HERE.stem
+        assert asked.call_args.kwargs["name"] == NEW.stem
+
+    def test_one_already_kept_is_offered_as_it_is(self, stored, monkeypatch):
+        asked = Mock(return_value=None)
+        monkeypatch.setattr(manager_module.AddFavouriteDialog, "ask", asked)
+        stored["favourites"] = Favourites(
+            [FavouriteFolder(name="Music", items=[_video("Song", path=NEW)])]
+        )
+
+        _manager(active=_block()).cmd_add_to_favourites()
+
+        kwargs = asked.call_args.kwargs
+        assert (kwargs["name"], kwargs["folder"], kwargs["is_kept"]) == (
+            "Song",
+            (0,),
+            True,
+        )
+
+    def test_a_new_one_is_offered_at_the_top(self, stored, monkeypatch):
+        asked = Mock(return_value=None)
+        monkeypatch.setattr(manager_module.AddFavouriteDialog, "ask", asked)
+
+        _manager(active=_block()).cmd_add_to_favourites()
+
+        assert (
+            asked.call_args.kwargs["folder"],
+            asked.call_args.kwargs["is_kept"],
+        ) == (
+            (),
+            False,
+        )
+
+    def test_one_already_kept_is_replaced(self, stored, monkeypatch):
+        stored["favourites"] = Favourites(
+            [
+                _video("Before"),
+                FavouriteFolder(name="Music", items=[_video("Old", path=NEW)]),
+            ]
+        )
+        monkeypatch.setattr(
+            manager_module.AddFavouriteDialog,
+            "ask",
+            Mock(return_value=(stored["favourites"], (1,), "New name")),
+        )
+
+        _manager(active=_block(loops=[(1, 2)])).cmd_add_to_favourites()
+
+        assert stored["favourites"].items_at((1,)) == [
+            FavouriteVideo(name="New name", path=NEW, loops=[(1, 2)])
+        ]
 
     def test_nothing_kept_when_thought_better_of(self, stored, monkeypatch):
         before = stored["favourites"].model_copy(deep=True)
@@ -375,6 +459,15 @@ class TestTheAddWindow:
         dialog.name.setText("  ")
 
         assert not dialog.ok_button.isEnabled()
+
+    def test_one_already_kept_opens_where_it_is_and_says_so(self):
+        dialog = AddFavouriteDialog(
+            _favourites(), name="Gig", loops=0, folder=(1, 1), is_kept=True
+        )
+
+        assert dialog.selected_folder == (1, 1)
+        assert not dialog.kept_note.isHidden()
+        assert AddFavouriteDialog(_favourites(), name="C", loops=0).kept_note.isHidden()
 
     def test_the_loops_kept_are_said(self):
         assert AddFavouriteDialog(Favourites(), name="C", loops=0).loops_note.isHidden()

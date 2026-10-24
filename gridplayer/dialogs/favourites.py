@@ -64,6 +64,8 @@ class AddFavouriteDialog(QDialog):
         name: str,
         loops: int,
         loop_start: int | None = None,
+        folder: FolderPath = (),
+        is_kept: bool = False,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -102,6 +104,13 @@ class AddFavouriteDialog(QDialog):
                 )
             )
 
+        # a favourite already, which this one takes the place of
+        self.kept_note = QLabel(
+            translate("Favourites", "Already in your favourites: this replaces it."),
+            self,
+        )
+        self.kept_note.setVisible(is_kept)
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self
         )
@@ -124,9 +133,10 @@ class AddFavouriteDialog(QDialog):
         layout.addLayout(form)
         layout.addWidget(self.loops_note)
         layout.addWidget(self.loop_start_note)
+        layout.addWidget(self.kept_note)
         layout.addWidget(buttons)
 
-        self.fill_folders()
+        self.fill_folders(selected=folder)
 
     def fill_folders(self, selected: FolderPath = ()):
         self.folder.clear()
@@ -169,6 +179,8 @@ class AddFavouriteDialog(QDialog):
         name: str,
         loops: int,
         loop_start: int | None = None,
+        folder: FolderPath = (),
+        is_kept: bool = False,
     ):
         """(the favourites with any folders made, the folder picked, the
         name given), None for the viewer thinking better of it."""
@@ -178,6 +190,8 @@ class AddFavouriteDialog(QDialog):
             name=name,
             loops=loops,
             loop_start=loop_start,
+            folder=folder,
+            is_kept=is_kept,
             parent=parent,
         )
 
