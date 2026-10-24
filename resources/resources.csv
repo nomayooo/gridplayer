@@ -75,6 +75,9 @@ icon-symbolic,icons/custom/bookmark remove all.svg,bookmark-remove-all
 icon-symbolic,icons/custom/bookmark remove.svg,bookmark-remove
 icon-symbolic,icons/custom/bookmark rename.svg,bookmark-rename
 icon-symbolic,icons/custom/bookmarks.svg,bookmarks
+icon-symbolic,icons/custom/favourites.svg,favourites
+icon-symbolic,icons/custom/favourite add.svg,favourite-add
+icon-symbolic,icons/basic/092-folder.svg,favourites-folder
 icon-symbolic,icons/custom/chapter next.svg,chapter-next
 icon-symbolic,icons/custom/chapter previous.svg,chapter-previous
 icon-symbolic,icons/custom/chapters.svg,chapters

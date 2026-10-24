@@ -8,6 +8,10 @@ SUBMENUS = MappingProxyType(
         "Jump (to)": {"title": translate("Actions", "Jump (to)"), "icon": "jump-to"},
         "Chapters": {"title": translate("Actions", "Chapters"), "icon": "chapters"},
         "Bookmarks": {"title": translate("Actions", "Bookmarks"), "icon": "bookmarks"},
+        "Favourites": {
+            "title": translate("Favourites", "Favourites"),
+            "icon": "favourites",
+        },
         "Loop": {"title": translate("Actions", "Loop"), "icon": "loop"},
         "Random Loop": {
             "title": translate("Actions", "Random Loop"),
@@ -706,6 +710,13 @@ SECTIONS = MappingProxyType(
                 "Add - URL(s)",
                 "Add - Clipboard",
                 "Add - Recent Videos",
+            ),
+            (
+                "Favourites",
+                "Add to Favourites",
+                "Manage Favourites",
+                "---",
+                "Favourites List",
             ),
             "Open Playlist",
             "Open Playlist (Recent)",

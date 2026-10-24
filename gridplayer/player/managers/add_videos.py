@@ -444,6 +444,7 @@ class AddVideosManager(ManagerBase):
             "add_from_clipboard": self.cmd_add_from_clipboard,
             "is_clipboard_full": self.is_clipboard_full,
             "add_media": self.add_media,
+            "add_favourite_videos": self.add_favourite_videos,
             "read_for_cell": self.read_for_cell,
         }
 
@@ -512,6 +513,41 @@ class AddVideosManager(ManagerBase):
 
         self._requests.append(request)
         self._next_request()
+
+    def add_favourite_videos(self, favourites):
+        """Favourites into cells of their own, each with the loops it was
+        kept with, and a loop begun and not finished playing from where it
+        was begun; one whose file is gone is said to be, the rest added."""
+
+        videos, missing = [], []
+
+        for favourite in favourites:
+            if not favourite.path.is_file():
+                missing.append(str(favourite.path))
+                continue
+
+            video = _video(
+                favourite.path,
+                loops=list(favourite.loops),
+                loop_start=favourite.loop_start,
+                current_position=favourite.loop_start,
+            )
+            if video is not None:
+                videos.append(video)
+
+        if missing:
+            self.error.emit(
+                "{}\n\n{}".format(
+                    translate("Error", "File not found!"), "\n".join(missing)
+                )
+            )
+
+        if not videos:
+            return
+
+        self._put_in_cells(videos, None)
+
+        self._ctx.commands.add_recent_uris([video.uri for video in videos])
 
     def _videos_or_their_playlists(self, uris):
         """A video opened from a playlist carries the playlist along in its

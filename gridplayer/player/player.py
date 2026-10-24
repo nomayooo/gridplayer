@@ -9,6 +9,7 @@ from gridplayer.player.managers.add_videos import AddVideosManager
 from gridplayer.player.managers.bookmarks import BookmarksManager
 from gridplayer.player.managers.dialogs import DialogsManager
 from gridplayer.player.managers.drag_n_drop import DragNDropManager
+from gridplayer.player.managers.favourites import FavouritesManager
 from gridplayer.player.managers.grid import GridManager
 from gridplayer.player.managers.instance_listener import InstanceListenerManager
 from gridplayer.player.managers.lists import ListsManager
@@ -66,6 +67,7 @@ class Player(QWidget, ManagersManager):
             "seek_preview": SeekPreviewManager,
             "add_videos": AddVideosManager,
             "recent_list": RecentListManager,
+            "favourites": FavouritesManager,
             "dialogs": DialogsManager,
             "settings": SettingsManager,
             "actions": ActionsManager,
