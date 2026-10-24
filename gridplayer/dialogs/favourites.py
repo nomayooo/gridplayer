@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (
     QHeaderView,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QShortcut,
     QTreeWidget,
@@ -22,6 +23,7 @@ from PyQt5.QtWidgets import (
 )
 
 from gridplayer.dialogs.input_dialog import QCustomTextInput
+from gridplayer.dialogs.messagebox import QCustomMessageBox
 from gridplayer.models.favourites import (
     FavouriteFolder,
     Favourites,
@@ -467,9 +469,38 @@ class ManageFavouritesDialog(QDialog):
             self.tree.editItem(selected[0], 0)
 
     def remove_selected(self):
-        for tree_item in self.tree.selectedItems():
+        selected = self.tree.selectedItems()
+
+        if not self._is_removing_sure(selected):
+            return
+
+        for tree_item in selected:
             parent_item = tree_item.parent() or self.tree.invisibleRootItem()
             parent_item.removeChild(tree_item)
+
+    def _is_removing_sure(self, selected) -> bool:
+        """Asked first when a folder is among them, as all it holds goes
+        with it; videos alone go without asking."""
+
+        folders = [i for i in selected if i.data(0, ITEM_FAVOURITE) is None]
+
+        if not folders:
+            return True
+
+        if len(folders) == 1:
+            question = translate(
+                "Favourites", 'Remove the folder "{NAME}" and everything in it?'
+            ).format(NAME=folders[0].text(0).strip())
+        else:
+            question = translate(
+                "Favourites", "Remove {COUNT} folders and everything in them?"
+            ).format(COUNT=count_txt(len(folders)))
+
+        answer = QCustomMessageBox.question(
+            self, translate("Favourites", "Remove"), question
+        )
+
+        return answer == QMessageBox.Yes
 
     @classmethod
     def edit(cls, parent, favourites: Favourites) -> Favourites | None:

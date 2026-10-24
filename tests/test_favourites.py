@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
 
 import pytest
-from PyQt5.QtWidgets import QWidget
+from PyQt5.QtWidgets import QMessageBox, QWidget
 
 from gridplayer.dialogs import favourites as dialogs
 from gridplayer.dialogs.favourites import (
@@ -487,6 +487,20 @@ class TestMakingOne:
         assert stored["favourites"] is before
 
 
+def _answered(monkeypatch, answer):
+    """Each "are you sure?" answered so, and what it asked kept."""
+
+    asked = []
+
+    def question(_parent, _title, text, **_kwargs):
+        asked.append(text)
+        return answer
+
+    monkeypatch.setattr(dialogs.QCustomMessageBox, "question", question)
+
+    return asked
+
+
 def _typed(monkeypatch, text):
     monkeypatch.setattr(
         dialogs.QCustomTextInput, "get_text", lambda *_args, **_kwargs: text
@@ -738,7 +752,8 @@ class TestTheManageWindow:
         assert [i.name for i in favourites.root] == ["Music", "Empty"]
         assert favourites.items_at((1,)) == [_video("Top", loops=[(1000, 2000)])]
 
-    def test_removed_with_what_it_holds(self):
+    def test_removed_with_what_it_holds(self, monkeypatch):
+        asked = _answered(monkeypatch, QMessageBox.Yes)
         dialog = ManageFavouritesDialog(_favourites())
         _tree_item(dialog, 1).setSelected(True)
         _tree_item(dialog, 0).setSelected(True)
@@ -746,6 +761,41 @@ class TestTheManageWindow:
         dialog.remove_selected()
 
         assert [i.name for i in dialog.favourites().root] == ["Empty"]
+        assert asked == ['Remove the folder "Music" and everything in it?']
+
+    def test_a_folder_kept_when_not_sure(self, monkeypatch):
+        _answered(monkeypatch, QMessageBox.No)
+        dialog = ManageFavouritesDialog(_favourites())
+        _tree_item(dialog, 1).setSelected(True)
+        _tree_item(dialog, 0).setSelected(True)
+
+        dialog.remove_selected()
+
+        assert dialog.favourites() == _favourites()
+
+    def test_folders_asked_about_together(self, monkeypatch):
+        asked = _answered(monkeypatch, QMessageBox.Yes)
+        dialog = ManageFavouritesDialog(_favourites())
+        _tree_item(dialog, 1).setSelected(True)
+        _tree_item(dialog, 2).setSelected(True)
+
+        dialog.remove_selected()
+
+        assert [i.name for i in dialog.favourites().root] == ["Top"]
+        assert asked == ["Remove 2 folders and everything in them?"]
+
+    def test_videos_alone_removed_without_asking(self, monkeypatch):
+        asked = _answered(monkeypatch, QMessageBox.No)
+        dialog = ManageFavouritesDialog(_favourites())
+        _tree_item(dialog, 0).setSelected(True)
+        _tree_item(dialog, 1, 0).setSelected(True)
+
+        dialog.remove_selected()
+
+        favourites = dialog.favourites()
+        assert [i.name for i in favourites.root] == ["Music", "Empty"]
+        assert len(favourites.items_at((0,))) == 1
+        assert asked == []
 
     @pytest.mark.parametrize(
         ("picked", "made_in"),
