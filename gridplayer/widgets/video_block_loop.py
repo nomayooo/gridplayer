@@ -8,6 +8,8 @@ and round, the loops made before it waiting; a seek may go anywhere, before
 it too, so that it can be put wherever it is wanted, Set Loop Start again
 moving it there. Set Loop End finishes it where the video is then, and it
 joins the others, playing; without one begun, Set Loop End does nothing.
+A-B Loop is both on one key: it begins one without one begun, and finishes
+the one begun otherwise.
 
 Where a loop ends up taking the video is the block's (see loop_start,
 loop_end and time_changed); here is only how the viewer sets them.
@@ -67,6 +69,19 @@ class LoopControl(VideoBlockPart):
             return
 
         self._add((start, new_time))
+
+    @only_seekable
+    def set_start_or_end(self):
+        """Begin a loop here without one begun, else finish the one begun
+        here; here being no later than it starts, it is begun here again."""
+
+        start = self._params.loop_start
+        time = self._block.time
+
+        if start is None or time is None or time <= start:
+            self.set_start_time(time)
+        else:
+            self.set_end_time(time)
 
     def replace_with(self, span: LoopSpan):
         """This one loop in place of any there were."""

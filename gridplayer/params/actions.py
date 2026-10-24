@@ -358,6 +358,18 @@ ACTIONS = MappingProxyType(
             "func": ("active", "loop.set_end"),
             "show_if": "is_active_seekable",
         },
+        "A-B Loop": {
+            # what it does next: the end with a loop begun, else the start
+            "title": (
+                translate("Actions", "A-B Loop: Set End"),
+                translate("Actions", "A-B Loop: Set Start"),
+            ),
+            "key": "L",
+            "icon": ("loop-end", "loop-start"),
+            "toggle": ("is_active_param_set_to", "loop_start", None),
+            "func": ("active", "loop.set_start_or_end"),
+            "show_if": "is_active_seekable",
+        },
         "Loop Reset": {
             "title": translate("Actions", "Loop Reset"),
             "key": "/",
@@ -1873,6 +1885,14 @@ ACTIONS = MappingProxyType(
             "key": "Shift+.",
             "icon": "loop-end",
             "func": ("all", "set_loop_end"),
+            "show_if": "is_any_videos_seekable",
+        },
+        "A-B Loop [ALL]": {
+            # each video its own next step, by the loop it has begun or not
+            "title": translate("Actions", "A-B Loop"),
+            "key": "Shift+L",
+            "icon": "loop",
+            "func": ("all", "set_loop_start_or_end"),
             "show_if": "is_any_videos_seekable",
         },
         "Loop Reset [ALL]": {
