@@ -32,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+- Select videos with Ctrl+Click and move them to a new window with everything they had: position, loops, bookmarks and list ([#15](https://github.com/nomayooo/gridplayer/pull/15))
 - Add Favourites: keep videos in folders as a web browser keeps its favourites, with their A-B loops, a loop start alone among them, and open one or a whole folder into the grid ([#12](https://github.com/nomayooo/gridplayer/pull/12))
 - Show a picture of the video at the time under the mouse when hovering the seek bar, for videos played from files on disk; can be turned off in Settings ([#10](https://github.com/nomayooo/gridplayer/pull/10))
 - Add multiple A-B loops, played one after another, with Next Loop, Previous Loop and Remove Last Loop actions; a seek outside them plays the video on from there until it reaches one ([a355a05](https://github.com/nomayooo/gridplayer/commit/a355a05ca6b39d825a48ff488ee9a96ee08d83de)), ([#2](https://github.com/nomayooo/gridplayer/pull/2))
