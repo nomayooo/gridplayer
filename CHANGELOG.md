@@ -32,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+- Add Delete File (Shift+Delete) to delete a video's file permanently, or the files of the videos selected, once asked ([#18](https://github.com/nomayooo/gridplayer/pull/18))
 - Select videos with Ctrl+Click and move them to a new window with everything they had: position, loops, bookmarks and list ([#15](https://github.com/nomayooo/gridplayer/pull/15))
 - Add Favourites: keep videos in folders as a web browser keeps its favourites, with their A-B loops, a loop start alone among them, and where they were, opened there again, each video once, saved again over itself, all the videos open at once into a folder, a folder removed only once asked, and open one or a whole folder into the grid ([#12](https://github.com/nomayooo/gridplayer/pull/12)), ([#16](https://github.com/nomayooo/gridplayer/pull/16)), ([#17](https://github.com/nomayooo/gridplayer/pull/17))
 - Show a picture of the video at the time under the mouse when hovering the seek bar, for videos played from files on disk; can be turned off in Settings ([#10](https://github.com/nomayooo/gridplayer/pull/10))
