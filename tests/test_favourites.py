@@ -528,6 +528,20 @@ class TestMakingOne:
 
         assert stored["favourites"] == edited
 
+    def test_opened_from_the_manager_into_the_grid(self, stored, monkeypatch):
+        def edit(parent, favourites, on_open):
+            on_open([favourites.root[0]])
+            return None
+
+        monkeypatch.setattr(manager_module.ManageFavouritesDialog, "edit", edit)
+        manager = _manager()
+
+        manager.cmd_manage_favourites()
+
+        manager._ctx.commands.add_favourite_videos.assert_called_once_with(
+            [stored["favourites"].root[0]]
+        )
+
     def test_put_in_order_not_kept_on_cancel(self, stored, monkeypatch):
         before = stored["favourites"]
         monkeypatch.setattr(
@@ -1171,6 +1185,67 @@ class TestTheManageWindow:
 
         items = dialog.favourites().items_at(made_in)
         assert items[-1] == FavouriteFolder(name="Made")
+
+    def _opened(self, dialog):
+        opened = []
+        dialog.open_requested.connect(opened.append)
+        return opened
+
+    def test_a_folder_opened_with_its_own_videos(self):
+        dialog = ManageFavouritesDialog(_favourites())
+        opened = self._opened(dialog)
+        _tree_item(dialog, 1).setSelected(True)
+
+        dialog.open_selected()
+
+        ((videos,),) = [opened]
+        # its own, not its folder's: as Open All of its menu
+        assert [v.name for v in videos] == ["Song"]
+
+    def test_double_clicked_opened(self):
+        dialog = ManageFavouritesDialog(_favourites())
+        opened = self._opened(dialog)
+
+        item = _tree_item(dialog, 1, 1)
+        dialog.tree.itemDoubleClicked.emit(item, 0)
+
+        assert [[v.name for v in videos] for videos in opened] == [["Gig"]]
+
+    def test_videos_and_folders_together_each_once_in_order(self):
+        dialog = ManageFavouritesDialog(_favourites())
+        opened = self._opened(dialog)
+        _tree_item(dialog, 1, 0).setSelected(True)
+        _tree_item(dialog, 1).setSelected(True)
+        _tree_item(dialog, 0).setSelected(True)
+
+        dialog.open_selected()
+
+        assert [v.name for v in opened[0]] == ["Top", "Song"]
+
+    def test_opened_as_renamed(self):
+        dialog = ManageFavouritesDialog(_favourites())
+        opened = self._opened(dialog)
+        _tree_item(dialog, 0).setText(0, "Renamed")
+        _tree_item(dialog, 0).setSelected(True)
+
+        dialog.open_selected()
+
+        assert opened[0][0].name == "Renamed"
+        assert opened[0][0].loops == [(1000, 2000)]
+
+    def test_open_only_with_something_to_open(self):
+        dialog = ManageFavouritesDialog(_favourites())
+        opened = self._opened(dialog)
+
+        assert not dialog.open_button.isEnabled()
+
+        _tree_item(dialog, 2).setSelected(True)
+        assert not dialog.open_button.isEnabled()
+        dialog.open_selected()
+        assert opened == []
+
+        _tree_item(dialog, 1).setSelected(True)
+        assert dialog.open_button.isEnabled()
 
     def test_rename_and_remove_with_something_picked(self):
         dialog = ManageFavouritesDialog(_favourites())
