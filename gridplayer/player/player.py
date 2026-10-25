@@ -28,6 +28,7 @@ from gridplayer.player.managers.playlist import PlaylistManager
 from gridplayer.player.managers.recent_list import RecentListManager
 from gridplayer.player.managers.screensaver import ScreensaverManager
 from gridplayer.player.managers.seek_preview import SeekPreviewManager
+from gridplayer.player.managers.session import SessionManager
 from gridplayer.player.managers.settings import SettingsManager
 from gridplayer.player.managers.single_mode import SingleModeManager
 from gridplayer.player.managers.snapshots import SnapshotsManager
@@ -73,6 +74,7 @@ class Player(QWidget, ManagersManager):
             "add_videos": AddVideosManager,
             "recent_list": RecentListManager,
             "favourites": FavouritesManager,
+            "session": SessionManager,
             "new_window": NewWindowManager,
             "delete_files": DeleteFilesManager,
             "dialogs": DialogsManager,
@@ -267,6 +269,9 @@ class Player(QWidget, ManagersManager):
             ],
             "favourites": [
                 ("error", "dialogs.error"),
+            ],
+            "session": [
+                ("window_state.closing", "cleanup"),
             ],
             "tray": [
                 ("settings.tray_settings_changed", "apply_settings"),

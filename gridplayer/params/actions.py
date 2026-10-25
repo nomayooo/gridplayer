@@ -2898,6 +2898,11 @@ ACTIONS = MappingProxyType(
             "func": "add_all_to_favourites",
             "enable_if": "is_any_videos_local_file",
         },
+        "Save Session to Favourites": {
+            "title": translate("Favourites", "Save Session"),
+            "icon": "save-playlist",
+            "func": "save_session",
+        },
         "Import Playlists to Favourites": {
             "title": translate("Favourites", "Import Playlists..."),
             "icon": "open-playlist",

@@ -1139,6 +1139,115 @@ class TestTheImportWindow:
         assert dialog.favourites.root[3].name == "Playlists"
 
 
+class TestSavingASession:
+    def test_the_files_open_here_as_they_are_in_the_grids_order(self, stored):
+        manager = _grid_of(
+            _block(title="One", position=1000, loops=[(0, 500)]),
+            _block(uri="https://example.com/live", title="Stream"),
+            _block(uri=HERE, title="Two", position=2000),
+        )
+
+        videos = manager.session_favourites()
+
+        assert [(v.name, v.position, v.loops) for v in videos] == [
+            ("One", 1000, [(0, 500)]),
+            ("Two", 2000, []),
+        ]
+
+    def test_each_window_in_a_numbered_folder_of_the_session(self, stored):
+        windows = [
+            [_video("a", path=NEW), _video("a", path=NEW, position=5)],
+            [_video("b")],
+        ]
+
+        _manager().save_session_favourites("2026-10-25 14:03:27", windows)
+
+        root = stored["favourites"].root
+        session = root[-1]
+        assert session.name == "2026-10-25 14:03:27"
+        assert [f.name for f in session.items] == ["1", "2"]
+        assert [v.name for v in session.items[0].items] == ["a", "a (2)"]
+        assert [v.name for v in session.items[1].items] == ["b"]
+        # what was there before kept as it was
+        assert [i.name for i in root[:-1]] == ["Top", "Music", "Empty"]
+
+
+@pytest.fixture
+def session(monkeypatch, tmp_path):
+    """The session manager, the others' answers and what was said set."""
+
+    from gridplayer.player.managers import session as session_module
+
+    state = SimpleNamespace(others=[], said=[])
+    monkeypatch.setattr(session_module, "get_app_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        session_module, "ask_other_windows", lambda *_a, **_k: state.others
+    )
+    monkeypatch.setattr(
+        session_module.QCustomMessageBox,
+        "information",
+        lambda _parent, _title, text, **kwargs: state.said.append(
+            (text, kwargs.get("info", ""))
+        ),
+    )
+
+    commands = MagicMock()
+    manager = session_module.SessionManager(context=SimpleNamespace(commands=commands))
+    manager.init()
+    state.manager = manager
+    state.commands = commands
+    yield state
+    manager.cleanup()
+
+
+class TestTheSessionManager:
+    def test_this_window_first_then_the_others(self, session):
+        session.commands.session_favourites.return_value = [_video("mine")]
+        session.others = [
+            [_video("first").model_dump(mode="json")],
+            [],
+            [_video("third").model_dump(mode="json")],
+        ]
+
+        session.manager.cmd_save_session()
+
+        ((name, windows), _) = session.commands.save_session_favourites.call_args
+        assert [[v.name for v in w] for w in windows] == [
+            ["mine"],
+            ["first"],
+            ["third"],
+        ]
+        assert len(name) == len("2026-10-25 14:03:27")
+        ((text, info),) = session.said
+        assert name in text
+        assert info == "Windows: 3, videos: 3"
+
+    def test_none_open_anywhere_nothing_saved(self, session):
+        session.commands.session_favourites.return_value = []
+
+        session.manager.cmd_save_session()
+
+        session.commands.save_session_favourites.assert_not_called()
+        assert session.said == [("No video files are open to save.", "")]
+
+    def test_a_window_saying_nonsense_left_out(self, session):
+        session.commands.session_favourites.return_value = [_video("mine")]
+        session.others = [[{"not": "a favourite"}]]
+
+        session.manager.cmd_save_session()
+
+        ((_, windows), _) = session.commands.save_session_favourites.call_args
+        assert len(windows) == 1
+
+    def test_this_window_known_to_the_others_while_open(self, session, tmp_path):
+        files = list((tmp_path / "windows").glob("*.json"))
+        assert [f.stem for f in files] == [session.manager._server.id]
+
+        session.manager.cleanup()
+
+        assert not list((tmp_path / "windows").glob("*.json"))
+
+
 class TestTheAddAllWindow:
     def test_titled_for_the_selected(self):
         all_of_them = AddAllFavouritesDialog(Favourites(), count=2, left_out=0)
