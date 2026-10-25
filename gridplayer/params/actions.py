@@ -384,6 +384,13 @@ ACTIONS = MappingProxyType(
             "func": ("active", "loop.remove_last"),
             "show_if": "is_active_seekable",
         },
+        "Undo Loop Marker": {
+            "title": translate("Actions", "Undo Loop Marker"),
+            "key": "Ctrl+Z",
+            "icon": "loop-reset",
+            "func": ("active", "loop.undo_marker"),
+            "show_if": "is_active_seekable",
+        },
         "Previous Loop": {
             "title": translate("Actions", "Previous Loop"),
             "key": "Ctrl+,",
@@ -1920,6 +1927,13 @@ ACTIONS = MappingProxyType(
             "title": translate("Actions", "Remove Last Loop"),
             "icon": "loop-reset",
             "func": ("all", "remove_last_loop"),
+            "show_if": "is_any_videos_seekable",
+        },
+        "Undo Loop Marker [ALL]": {
+            "title": translate("Actions", "Undo Loop Marker"),
+            "key": "Ctrl+Shift+Z",
+            "icon": "loop-reset",
+            "func": ("all", "undo_loop_marker"),
             "show_if": "is_any_videos_seekable",
         },
         "Previous Loop [ALL]": {

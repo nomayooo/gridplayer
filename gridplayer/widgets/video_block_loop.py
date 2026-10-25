@@ -9,7 +9,9 @@ it too, so that it can be put wherever it is wanted, Set Loop Start again
 moving it there. Set Loop End finishes it where the video is then, and it
 joins the others, playing; without one begun, Set Loop End does nothing.
 A-B Loop is both on one key: it begins one without one begun, and finishes
-the one begun otherwise.
+the one begun otherwise. Undo Loop Marker takes them back a step at a
+time: the end of the last loop made, leaving it begun from its start, or
+the start of the one begun.
 
 Where a loop ends up taking the video is the block's (see loop_start,
 loop_end and time_changed); here is only how the viewer sets them.
@@ -123,6 +125,27 @@ class LoopControl(VideoBlockPart):
             params.loop_start = None
         elif params.loops:
             params.loops.pop()
+            if params.loop_index >= len(params.loops):
+                params.loop_index = 0
+        else:
+            return
+
+        self.announce()
+
+    @only_seekable
+    def undo_marker(self):
+        """Take back the last marker set: the start of the loop begun, or
+        else the end of the last one made, which is begun again from its
+        start, for another end to be set."""
+
+        params = self._params
+
+        if params.loop_start is not None:
+            params.loop_start = None
+        elif params.loops:
+            start, _ = params.loops.pop()
+            params.loop_start = start
+            params.is_outside_loops = False
             if params.loop_index >= len(params.loops):
                 params.loop_index = 0
         else:

@@ -121,6 +121,56 @@ class TestOneKeyForBoth:
         assert block.video_params.loops == []
 
 
+class TestUndoingAMarker:
+    def test_the_start_of_the_one_begun(self, block):
+        block.seek(5000)
+        block.loop.set_start()
+
+        block.loop.undo_marker()
+
+        assert block.video_params.loop_start is None
+        assert block.video_params.loops == []
+
+    def test_the_end_of_the_last_made_leaving_it_begun(self, two_loops):
+        two_loops.loop.undo_marker()
+
+        assert two_loops.video_params.loops == [(20000, 30000)]
+        assert two_loops.video_params.loop_start == 5000
+
+    def test_a_new_end_set_after(self, block):
+        _make_loop(block, 5000, 8000)
+        block.loop.undo_marker()
+
+        block.seek(12000)
+        block.loop.set_end()
+
+        assert block.video_params.loops == [(5000, 12000)]
+
+    def test_a_marker_at_a_time_back_to_none(self, two_loops):
+        # the second's end and start, then the first's end
+        for _ in range(3):
+            two_loops.loop.undo_marker()
+
+        assert two_loops.video_params.loops == []
+        assert two_loops.video_params.loop_start == 20000
+
+        two_loops.loop.undo_marker()
+        assert two_loops.video_params.loop_start is None
+
+        # nothing left: nothing done
+        two_loops.loop.undo_marker()
+        assert two_loops.video_params.loops == []
+
+    def test_one_key_for_both_goes_on_from_there(self, block):
+        _make_loop(block, 5000, 8000)
+        block.loop.undo_marker()
+
+        block.seek(9000)
+        block.loop.set_start_or_end()
+
+        assert block.video_params.loops == [(5000, 9000)]
+
+
 class TestPlayingThem:
     def test_the_end_of_one_goes_on_to_the_next_round_to_the_first(self, two_loops):
         # the last made is playing, the end of which goes round to the first
