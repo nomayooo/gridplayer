@@ -32,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+- Add Undo Loop Marker (Ctrl+Z) to take back A-B loop markers one at a time, and Ctrl+Shift+Z for every video ([#27](https://github.com/nomayooo/gridplayer/pull/27))
 - Import playlists as favourites, each into a folder of its name inside the folder picked, one renamed as wished or several at once ([#24](https://github.com/nomayooo/gridplayer/pull/24))
 - Add A-B Loop (L) to set a loop's start and then its end on one key, and Shift+L for every video ([#19](https://github.com/nomayooo/gridplayer/pull/19))
 - Add Delete File (Shift+Delete) to delete a video's file permanently, or the files of the videos selected, once asked ([#18](https://github.com/nomayooo/gridplayer/pull/18))
