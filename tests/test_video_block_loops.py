@@ -171,6 +171,86 @@ class TestUndoingAMarker:
         assert block.video_params.loops == [(5000, 9000)]
 
 
+class TestRoundTheStartMarkers:
+    """With a loop begun, Next and Previous go from one start marker to
+    another on the bar, the begun one's too, round the ends of them."""
+
+    @pytest.fixture
+    def begun(self, two_loops):
+        # made: 20-30s, 5-8s; begun at 14s
+        two_loops.seek(14000)
+        two_loops.loop.set_start()
+        return two_loops
+
+    def test_next_to_the_next_start_after_here(self, begun):
+        begun.seek(10000)
+
+        begun.loop.next()
+
+        assert begun.time == 14000
+
+    def test_next_from_a_marker_to_the_one_after(self, begun):
+        begun.seek(14000)
+
+        begun.loop.next()
+
+        assert begun.time == 20000
+
+    def test_next_past_the_last_round_to_the_first(self, begun):
+        begun.seek(25000)
+
+        begun.loop.next()
+
+        assert begun.time == 5000
+
+    def test_previous_to_the_one_before(self, begun):
+        begun.seek(20000)
+
+        begun.loop.previous()
+
+        assert begun.time == 14000
+
+    def test_previous_before_the_first_round_to_the_last(self, begun):
+        begun.seek(5000)
+
+        begun.loop.previous()
+
+        assert begun.time == 20000
+
+    def test_the_loop_begun_left_begun(self, begun):
+        begun.loop.next()
+        begun.loop.previous()
+
+        assert begun.video_params.loop_start == 14000
+        assert begun.video_params.loops == [(20000, 30000), (5000, 8000)]
+
+    def test_a_begun_one_alone_back_to_its_start(self, block):
+        block.seek(6000)
+        block.loop.set_start()
+        block.seek(9000)
+
+        block.loop.next()
+        assert block.time == 6000
+
+        block.seek(9000)
+        block.loop.previous()
+        assert block.time == 6000
+
+
+class TestOneLoop:
+    def test_next_and_previous_back_to_its_start(self, block):
+        _make_loop(block, 5000, 8000)
+        block.seek(7000)
+
+        block.loop.next()
+        assert block.time == 5000
+        assert block.video_params.loop_index == 0
+
+        block.seek(7000)
+        block.loop.previous()
+        assert block.time == 5000
+
+
 class TestPlayingThem:
     def test_the_end_of_one_goes_on_to_the_next_round_to_the_first(self, two_loops):
         # the last made is playing, the end of which goes round to the first
