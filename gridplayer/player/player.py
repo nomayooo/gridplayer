@@ -265,6 +265,9 @@ class Player(QWidget, ManagersManager):
             "delete_files": [
                 ("error", "dialogs.error"),
             ],
+            "favourites": [
+                ("error", "dialogs.error"),
+            ],
             "tray": [
                 ("settings.tray_settings_changed", "apply_settings"),
                 # whether the taskbar button can go depends on the icon

@@ -122,6 +122,75 @@ class _InFolderDialog(QDialog):
         self.fill_folders(selected=new_path)
 
 
+class ImportPlaylistsDialog(_InFolderDialog):
+    """Playlists imported, each as a folder of its videos named after it, in
+    a folder of the viewer's picking: one under a name the viewer may
+    change, several under their own."""
+
+    def __init__(self, favourites: Favourites, names: list[str], **kwargs):
+        super().__init__(favourites, **kwargs)
+
+        self._names = names
+
+        form = QFormLayout()
+
+        if len(names) == 1:
+            self.setWindowTitle(translate("Favourites", "Import Playlist"))
+
+            self.name = QLineEdit(names[0], self)
+            self.name.setMinimumWidth(320)
+            self.name.selectAll()
+            self.name.setPlaceholderText(translate("Favourites", "Folder name"))
+            self.name.textChanged.connect(
+                lambda text: self.ok_button.setEnabled(bool(text.strip()))
+            )
+
+            form.addRow(translate("Favourites", "Name:"), self.name)
+        else:
+            self.setWindowTitle(translate("Favourites", "Import Playlists"))
+            self.name = None
+
+        form.addRow(translate("Favourites", "Into:"), self._folder_row())
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+
+        if self.name is None:
+            self.count_note = QLabel(
+                translate(
+                    "Favourites",
+                    "Playlists to import: {COUNT}, each into a folder of its name.",
+                ).format(COUNT=count_txt(len(names))),
+                self,
+            )
+            self.count_note.setWordWrap(True)
+            layout.addWidget(self.count_note)
+
+        layout.addWidget(self.buttons)
+
+        self.fill_folders()
+
+    @property
+    def names(self) -> list[str]:
+        if self.name is None:
+            return list(self._names)
+
+        return [self.name.text().strip()]
+
+    @classmethod
+    def ask(cls, parent, favourites: Favourites, names: list[str]):
+        """(the favourites with any folders made, the folder picked, the
+        names of the folders the playlists go in), None for the viewer
+        thinking better of it."""
+
+        dialog = cls(favourites=favourites, names=names, parent=parent)
+
+        if not dialog.exec() or not all(dialog.names):
+            return None
+
+        return dialog.favourites, dialog.selected_folder, dialog.names
+
+
 class AddFavouriteDialog(_InFolderDialog):
     """The active video made a favourite: under what name, in which folder."""
 
