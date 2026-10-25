@@ -164,6 +164,14 @@ class TestTheModel:
         assert [i.name for i in favourites.root] == ["New"]
         assert [i.name for i in favourites.items_at((0,))] == ["a", "b"]
 
+    def test_into_a_folder_only_those_elsewhere_left(self):
+        favourites = Favourites([_video("a"), FavouriteFolder(name="New")])
+
+        favourites.put_videos((1,), [_video("a")], is_folder_only=True)
+
+        assert [i.name for i in favourites.root] == ["a", "New"]
+        assert [i.name for i in favourites.items_at((1,))] == ["a"]
+
     def test_the_names_a_file_is_kept_under(self):
         assert _favourites().names_of(HERE) == {"Top", "Song", "Gig"}
         assert _favourites().names_of(NEW) == set()
@@ -733,6 +741,193 @@ class TestMakingTheSelected:
         assert not _manager(active=None).is_any_to_favourite()
         assert not _manager(active=_block(), selected=[stream]).is_any_to_favourite()
         assert _manager(active=stream, selected=[_block()]).is_any_to_favourite()
+
+
+def _playlist(path, *videos):
+    from gridplayer.models.playlist import Playlist
+
+    Playlist(videos=list(videos), save_position=True).save(path)
+    return path
+
+
+@pytest.fixture
+def importing(stored, monkeypatch):
+    """Playlists picked, the folder name given or left; what was said."""
+
+    state = SimpleNamespace(picked=[], name=lambda name: name, asked=[])
+
+    monkeypatch.setattr(
+        manager_module.QFileDialog,
+        "getOpenFileNames",
+        lambda *_a, **_k: ([str(p) for p in state.picked], ""),
+    )
+
+    def folder_name(_parent, name):
+        state.asked.append(name)
+        return state.name(name)
+
+    monkeypatch.setattr(manager_module, "imported_folder_name", folder_name)
+
+    manager = _manager()
+    state.errors = []
+    manager.error.connect(state.errors.append)
+    state.manager = manager
+    stored["favourites"] = Favourites([_video("Kept")])
+
+    return state
+
+
+class TestImportingPlaylists:
+    def test_one_into_a_folder_of_its_name(self, importing, stored, tmp_path):
+        from gridplayer.models.video import Video
+
+        importing.picked = [
+            _playlist(
+                tmp_path / "Mix.gpls",
+                Video(uri=HERE, loops=[(1000, 2000)], current_position=1500),
+                Video(uri=NEW, title="Titled"),
+            )
+        ]
+
+        importing.manager.cmd_import_playlists()
+
+        assert importing.asked == ["Mix"]
+        root = stored["favourites"].root
+        assert [i.name for i in root] == ["Kept", "Mix"]
+        videos = root[1].items
+        assert [(v.name, v.path) for v in videos] == [
+            (HERE.name, HERE),
+            ("Titled", NEW),
+        ]
+        assert (videos[0].loops, videos[0].position) == ([(1000, 2000)], 1500)
+
+    def test_one_saved_without_positions_opens_as_a_new_one(
+        self, importing, stored, tmp_path
+    ):
+        from gridplayer.models.playlist import Playlist
+        from gridplayer.models.video import Video
+
+        path = tmp_path / "Mix.gpls"
+        Playlist(
+            videos=[Video(uri=HERE, current_position=1500)], save_position=False
+        ).save(path)
+        importing.picked = [path]
+
+        importing.manager.cmd_import_playlists()
+
+        assert stored["favourites"].root[1].items[0].position is None
+
+    def test_one_renamed(self, importing, stored, tmp_path):
+        from gridplayer.models.video import Video
+
+        importing.picked = [_playlist(tmp_path / "Mix.gpls", Video(uri=HERE))]
+        importing.name = lambda _name: "Evening"
+
+        importing.manager.cmd_import_playlists()
+
+        assert [i.name for i in stored["favourites"].root] == ["Kept", "Evening"]
+
+    def test_one_not_imported_when_thought_better_of(self, importing, stored, tmp_path):
+        from gridplayer.models.video import Video
+
+        before = stored["favourites"].model_copy(deep=True)
+        importing.picked = [_playlist(tmp_path / "Mix.gpls", Video(uri=HERE))]
+        importing.name = lambda _name: None
+
+        importing.manager.cmd_import_playlists()
+
+        assert stored["favourites"] == before
+
+    def test_several_under_their_own_names_unasked(self, importing, stored, tmp_path):
+        from gridplayer.models.video import Video
+
+        importing.picked = [
+            _playlist(tmp_path / "One.gpls", Video(uri=HERE)),
+            _playlist(tmp_path / "Two.gpls", Video(uri=NEW)),
+        ]
+
+        importing.manager.cmd_import_playlists()
+
+        assert importing.asked == []
+        root = stored["favourites"].root
+        assert [i.name for i in root] == ["Kept", "One", "Two"]
+        assert [v.path for v in root[2].items] == [NEW]
+
+    def test_copies_numbered_and_streams_left_out(self, importing, stored, tmp_path):
+        from gridplayer.models.video import Video
+
+        importing.picked = [
+            _playlist(
+                tmp_path / "Mix.gpls",
+                Video(uri=HERE, current_position=1),
+                Video(uri="https://example.com/live.m3u8"),
+                Video(uri=HERE, current_position=2),
+            )
+        ]
+
+        importing.manager.cmd_import_playlists()
+
+        videos = stored["favourites"].root[1].items
+        assert [(v.name, v.position) for v in videos] == [
+            (HERE.name, 1),
+            (f"{HERE.name} (2)", 2),
+        ]
+
+    def test_a_video_in_two_kept_in_both(self, importing, stored, tmp_path):
+        from gridplayer.models.video import Video
+
+        importing.picked = [
+            _playlist(tmp_path / "One.gpls", Video(uri=HERE), Video(uri=NEW)),
+            _playlist(tmp_path / "Two.gpls", Video(uri=NEW)),
+        ]
+
+        importing.manager.cmd_import_playlists()
+
+        root = stored["favourites"].root
+        assert [v.path for v in root[1].items] == [HERE, NEW]
+        assert [v.path for v in root[2].items] == [NEW]
+
+    def test_imported_again_into_the_same_folder(self, importing, stored, tmp_path):
+        from gridplayer.models.video import Video
+
+        path = tmp_path / "Mix.gpls"
+        importing.picked = [_playlist(path, Video(uri=HERE, current_position=1))]
+        importing.manager.cmd_import_playlists()
+
+        _playlist(path, Video(uri=HERE, current_position=2))
+        importing.manager.cmd_import_playlists()
+
+        root = stored["favourites"].root
+        assert [i.name for i in root] == ["Kept", "Mix"]
+        assert [v.position for v in root[1].items] == [2]
+
+    def test_ones_that_could_not_be_read_or_have_no_files_said(
+        self, importing, stored, tmp_path
+    ):
+        from gridplayer.models.video import Video
+
+        broken = tmp_path / "Broken.gpls"
+        broken.write_text("{ not a playlist")
+        importing.picked = [
+            broken,
+            _playlist(tmp_path / "Streams.gpls", Video(uri="https://example.com/a")),
+            _playlist(tmp_path / "Good.gpls", Video(uri=HERE)),
+        ]
+
+        importing.manager.cmd_import_playlists()
+
+        assert [i.name for i in stored["favourites"].root] == ["Kept", "Good"]
+        assert importing.errors == [
+            "Couldn't read Broken.gpls\nNo video files in Streams.gpls"
+        ]
+
+    def test_nothing_when_none_picked(self, importing, stored):
+        before = stored["favourites"].model_copy(deep=True)
+
+        importing.manager.cmd_import_playlists()
+
+        assert stored["favourites"] == before
+        assert importing.asked == []
 
 
 class TestTheAddAllWindow:

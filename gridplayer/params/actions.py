@@ -2884,6 +2884,11 @@ ACTIONS = MappingProxyType(
             "func": "add_all_to_favourites",
             "enable_if": "is_any_videos_local_file",
         },
+        "Import Playlists to Favourites": {
+            "title": translate("Favourites", "Import Playlists..."),
+            "icon": "open-playlist",
+            "func": "import_playlists_to_favourites",
+        },
         "Manage Favourites": {
             "title": translate("Favourites", "Manage Favourites..."),
             "icon": "favourites",

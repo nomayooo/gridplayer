@@ -110,8 +110,16 @@ class Favourites(RootModel[list[FavouriteItem]]):
 
         self.put_videos(folder, [video])
 
-    def put_videos(self, folder: FolderPath, videos: list[FavouriteVideo]) -> None:
-        """Several put in a folder, one after another, as put_video puts one.
+    def put_videos(
+        self,
+        folder: FolderPath,
+        videos: list[FavouriteVideo],
+        is_folder_only: bool = False,
+    ) -> None:
+        """Several put in a folder, one after another, as put_video puts one;
+        or, folder only, each in place of one of the same name in that
+        folder alone, the others elsewhere left, as a playlist imported has
+        its videos all in its folder, whichever others have them too.
 
         The folder's own list is taken once, before any is taken out of it
         or before it: a folder is known by where it is, which that changes,
@@ -121,10 +129,16 @@ class Favourites(RootModel[list[FavouriteItem]]):
         target = self.items_at(folder)
 
         for video in videos:
-            self._put_into(target, video)
+            self._put_into(target, video, is_folder_only)
 
-    def _put_into(self, target: list, video: FavouriteVideo) -> None:
-        lists = [self.items_at(path) for path, _ in self.folders()]
+    def _put_into(
+        self, target: list, video: FavouriteVideo, is_folder_only: bool = False
+    ) -> None:
+        lists = (
+            [target]
+            if is_folder_only
+            else [self.items_at(path) for path, _ in self.folders()]
+        )
 
         is_replaced = False
 

@@ -57,6 +57,22 @@ def _new_folder_name(parent) -> str | None:
     return name or None
 
 
+def imported_folder_name(parent, name: str) -> str | None:
+    """The name of the folder a playlist imported goes in, as the viewer
+    leaves or changes it; None for the viewer thinking better of it."""
+
+    dialog = QCustomTextInput(parent=parent)
+    dialog.setWindowTitle(translate("Favourites", "Import Playlist: Folder Name"))
+    dialog.line_edit.setText(name)
+    dialog.line_edit.selectAll()
+    dialog.line_edit.setPlaceholderText(translate("Favourites", "Folder name"))
+
+    if not dialog.exec():
+        return None
+
+    return dialog.line_edit.text().strip() or None
+
+
 class _InFolderDialog(QDialog):
     """Favourites made in a folder of the viewer's picking, or of their
     making, to be put in on OK: the folder picked, and the buttons."""

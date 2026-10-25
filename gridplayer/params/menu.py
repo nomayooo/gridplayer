@@ -725,6 +725,7 @@ SECTIONS = MappingProxyType(
                 "Favourites",
                 "Add to Favourites",
                 "Add All to Favourites",
+                "Import Playlists to Favourites",
                 "Manage Favourites",
                 "---",
                 "Favourites List",

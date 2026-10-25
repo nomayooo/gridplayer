@@ -1,14 +1,19 @@
 """Favourite videos, in folders, as a web browser keeps its favourites (see
 gridplayer.models.favourites): made from the active video, kept with the
 settings, and opened from the Favourites menu into the grid, a video at a
-time or a folder's at once."""
+time or a folder's at once; and playlists imported, each as a folder of
+its videos."""
 
 from pathlib import Path
+
+from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtWidgets import QFileDialog
 
 from gridplayer.dialogs.favourites import (
     AddAllFavouritesDialog,
     AddFavouriteDialog,
     ManageFavouritesDialog,
+    imported_folder_name,
 )
 from gridplayer.models.favourites import (
     FavouriteFolder,
@@ -17,6 +22,8 @@ from gridplayer.models.favourites import (
     FolderPath,
     videos_in,
 )
+from gridplayer.models.playlist import Playlist
+from gridplayer.models.video import Video
 from gridplayer.player.managers.base import ManagerBase
 from gridplayer.player.managers.recent_list import elide_str
 from gridplayer.settings import Settings
@@ -27,11 +34,14 @@ MENU_NAME_MAX_LENGTH = 60
 
 
 class FavouritesManager(ManagerBase):
+    error = pyqtSignal(str)
+
     @property
     def commands(self):
         return {
             "add_to_favourites": self.cmd_add_to_favourites,
             "add_all_to_favourites": self.cmd_add_all_to_favourites,
+            "import_playlists_to_favourites": self.cmd_import_playlists,
             "manage_favourites": self.cmd_manage_favourites,
             "menu_generator_favourites": self.menu_generator_favourites,
             "menu_generator_favourites_folder": self.menu_generator_favourites_folder,
@@ -210,25 +220,89 @@ class FavouritesManager(ManagerBase):
 
         favourites, folder = added
 
-        # copies of one file, at different places in it, each kept under a
-        # name of its own: "A", "A (2)", "A (3)", in the grid's order; the
-        # same names again the next time, to be replaced as any are
-        copies: dict = {}
-        made = []
-
-        for block in files:
-            path = block.video_params.uri
-            copies[path] = copies.get(path, 0) + 1
-
-            name = None
-            if copies[path] > 1:
-                name = f"{_name_of(block)} ({copies[path]})"
-
-            made.append(_favourite_of(block, name))
-
-        favourites.put_videos(folder, made)
+        favourites.put_videos(
+            folder, _numbered([_favourite_of(block) for block in files])
+        )
 
         self._save(favourites)
+
+    def cmd_import_playlists(self) -> None:
+        """Playlists made favourites, each a folder of its videos named after
+        it: one alone under a name the viewer may change, several under
+        their own. A folder of the name already at the top is filled again,
+        each of its videos replaced as a favourite of the same name is."""
+
+        paths = self._ask_playlists()
+
+        if not paths:
+            return
+
+        if len(paths) == 1:
+            name = imported_folder_name(self.parent(), paths[0].stem)
+            if name is None:
+                return
+            names = [name]
+        else:
+            names = [path.stem for path in paths]
+
+        favourites = self.favourites
+        problems = []
+
+        for path, name in zip(paths, names):
+            try:
+                playlist = Playlist.read(path)
+            except (OSError, ValueError) as e:
+                self._log.error(f"Playlist not imported: {path}: {e}")
+                problems.append(
+                    translate("Favourites", "Couldn't read {NAME}").format(
+                        NAME=path.name
+                    )
+                )
+                continue
+
+            # streams and links, which favourites are not made of
+            videos = [v for v in playlist.videos or [] if isinstance(v.uri, Path)]
+
+            if not videos:
+                problems.append(
+                    translate("Favourites", "No video files in {NAME}").format(
+                        NAME=path.name
+                    )
+                )
+                continue
+
+            # a playlist saved without where its videos were (the default)
+            # says 0 for each: none, for each to open as a new one would
+            made = [
+                _favourite_of_video(video).model_copy(
+                    update={"position": video.current_position or None}
+                )
+                for video in videos
+            ]
+
+            # each playlist's folder with all its videos, those in others too
+            favourites.put_videos(
+                _top_folder(favourites, name), _numbered(made), is_folder_only=True
+            )
+
+        self._save(favourites)
+
+        if problems:
+            self.error.emit("\n".join(problems))
+
+    def _ask_playlists(self) -> list[Path]:
+        files, _ = QFileDialog.getOpenFileNames(
+            self.parent(),
+            translate("Favourites", "Import Playlists"),
+            "",
+            "{} (*.gpls)".format(
+                translate(
+                    "Dialog - Open Playlist", "GridPlayer Playlists", "File format"
+                )
+            ),
+        )
+
+        return [Path(file) for file in files]
 
     def cmd_manage_favourites(self) -> None:
         edited = ManageFavouritesDialog.edit(
@@ -246,15 +320,52 @@ def _name_of(block) -> str:
     return block.title or Path(block.video_params.uri).stem
 
 
+def _numbered(made: list[FavouriteVideo]) -> list[FavouriteVideo]:
+    """Copies of one file, at different places in it, each kept under a name
+    of its own: "A", "A (2)", "A (3)", in the order given; the same names
+    again the next time, to be replaced as any are."""
+
+    copies: dict = {}
+    numbered = []
+
+    for video in made:
+        copies[video.path] = copies.get(video.path, 0) + 1
+        count = copies[video.path]
+
+        if count > 1:
+            video = video.model_copy(update={"name": f"{video.name} ({count})"})
+
+        numbered.append(video)
+
+    return numbered
+
+
+def _top_folder(favourites: Favourites, name: str) -> FolderPath:
+    """The folder of the name at the top, made at the end if there is none."""
+
+    for index, item in enumerate(favourites.root):
+        if isinstance(item, FavouriteFolder) and item.name == name:
+            return (index,)
+
+    favourites.root.append(FavouriteFolder(name=name))
+
+    return (len(favourites.root) - 1,)
+
+
 def _favourite_of(block, name: str | None = None) -> FavouriteVideo:
     """The video a cell plays, as a favourite: its file, its loops, where
     it is in it, under the name given, else the one the cell shows, else
     the file's."""
 
-    params = block.video_params
+    return _favourite_of_video(block.video_params, name or _name_of(block))
+
+
+def _favourite_of_video(params: Video, name: str | None = None) -> FavouriteVideo:
+    """A video as a playlist keeps it, as a favourite, under the name given,
+    else its title, else its file's name."""
 
     return FavouriteVideo(
-        name=name or _name_of(block),
+        name=name or params.title or Path(params.uri).name,
         path=params.uri,
         loops=list(params.loops),
         loop_start=params.loop_start,
