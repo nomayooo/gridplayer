@@ -44,6 +44,8 @@ class FavouritesManager(ManagerBase):
             "add_to_favourites": self.cmd_add_to_favourites,
             "add_all_to_favourites": self.cmd_add_all_to_favourites,
             "import_playlists_to_favourites": self.cmd_import_playlists,
+            "session_favourites": self.session_favourites,
+            "save_session_favourites": self.save_session_favourites,
             "manage_favourites": self.cmd_manage_favourites,
             "menu_generator_favourites": self.menu_generator_favourites,
             "menu_generator_favourites_folder": self.menu_generator_favourites_folder,
@@ -350,6 +352,33 @@ class FavouritesManager(ManagerBase):
         )
 
         return [Path(file) for file in files]
+
+    def session_favourites(self) -> list[FavouriteVideo]:
+        """The videos open here that are files, each as it is now, as a
+        favourite, in the grid's order."""
+
+        blocks = self._ctx.video_blocks.blocks_for_ids(
+            self._ctx.commands.layout_order()
+        )
+
+        return [_favourite_of(block) for block in blocks if block.is_local_file]
+
+    def save_session_favourites(self, name: str, windows: list[list]) -> None:
+        """A session saved: a folder of the name at the top, holding each
+        window's videos in a folder of its own numbered from 1."""
+
+        favourites = self.favourites
+
+        session = _sub_folder(favourites, (), name)
+
+        for number, videos in enumerate(windows, start=1):
+            favourites.put_videos(
+                _sub_folder(favourites, session, str(number)),
+                _numbered(videos),
+                is_folder_only=True,
+            )
+
+        self._save(favourites)
 
     def cmd_manage_favourites(self) -> None:
         edited = ManageFavouritesDialog.edit(
