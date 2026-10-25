@@ -383,6 +383,23 @@ class TestMovingOut:
         assert manager.errors == []
         blocks[0].close.assert_called_once_with()
 
+    def test_videos_opened_in_one_this_one_left(self, manager, blocks, started):
+        from gridplayer.models.video import Video
+
+        videos = [Video(uri=HERE, current_position=5000), Video(uri=HERE)]
+
+        assert manager.cmd_open_in_new_window(videos) is True
+
+        path, moved = _handed_over(started)
+        assert [m.cell.video.current_position for m in moved.cells] == [5000, 0]
+        assert len({m.cell.id for m in moved.cells}) == 2
+        assert not any(b.close.called for b in blocks)
+        path.unlink()
+
+    def test_none_to_open_no_window(self, manager, started):
+        assert manager.cmd_open_in_new_window([]) is False
+        assert started == []
+
     def test_nothing_with_no_cell(self, manager, started):
         manager._ctx.active_block = None
 

@@ -527,18 +527,7 @@ class AddVideosManager(ManagerBase):
                 missing.append(str(favourite.path))
                 continue
 
-            video = _video(
-                favourite.path,
-                loops=list(favourite.loops),
-                loop_start=favourite.loop_start,
-                current_position=(
-                    favourite.loop_start
-                    if favourite.position is None
-                    else favourite.position
-                ),
-                loop_index=favourite.loop_index,
-                is_outside_loops=favourite.is_outside_loops,
-            )
+            video = favourite_as_video(favourite)
             if video is not None:
                 videos.append(video)
 
@@ -1199,6 +1188,23 @@ def list_end_action() -> VideoEndAction:
     # a cell made to play a list goes along it, whatever a cell playing
     # one file is set to do by default
     return list_step_action(PlaylistSettings().get("video_defaults/end_action"))
+
+
+def favourite_as_video(favourite) -> Video | None:
+    """A favourite as a video to open: with the loops it was kept with, at
+    where it was kept at, else, with a loop begun and not finished, where
+    that was begun."""
+
+    return _video(
+        favourite.path,
+        loops=list(favourite.loops),
+        loop_start=favourite.loop_start,
+        current_position=(
+            favourite.loop_start if favourite.position is None else favourite.position
+        ),
+        loop_index=favourite.loop_index,
+        is_outside_loops=favourite.is_outside_loops,
+    )
 
 
 def _video(uri, **fields) -> Video | None:
