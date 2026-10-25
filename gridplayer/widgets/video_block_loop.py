@@ -13,12 +13,21 @@ the one begun otherwise. Undo Loop Marker takes them back a step at a
 time: the end of the last loop made, leaving it begun from its start, or
 the start of the one begun.
 
+Next and Previous Loop go from one loop made to another, in the order they
+were made and round again; with only one, back to its start. With a loop
+begun, the video free to go anywhere, they go from one start marker to the
+next or the one before on the bar, the begun one's too, and round again.
+
 Where a loop ends up taking the video is the block's (see loop_start,
 loop_end and time_changed); here is only how the viewer sets them.
 """
 
 from gridplayer.models.video import LoopSpan
 from gridplayer.widgets.video_block_guards import VideoBlockPart, only_seekable
+
+# a marker the video is at, or just past, is the one it is at: the next is
+# the one after it, the one before the one before it
+START_MARKER_MARGIN_MS = 500
 
 
 class LoopControl(VideoBlockPart):
@@ -164,13 +173,40 @@ class LoopControl(VideoBlockPart):
         self._go(-1)
 
     def _go(self, step: int):
+        params = self._params
+
+        if params.loop_start is not None:
+            self._to_start_marker(step)
+            return
+
         # from outside them, back to the one it left
-        if self._params.is_outside_loops and not self._params.is_loop_open:
+        if params.is_outside_loops and not params.is_loop_open:
             self.rejoin()
+        elif len(params.loops) == 1:
+            # the one there is, from its start again
+            pass
         elif not self.step(step):
             return
 
         self._block._loop_to_start()
+
+    def _to_start_marker(self, step: int):
+        """With a loop begun: to the next start marker on the bar after
+        where the video is, or the one before, round the ends of them."""
+
+        params = self._params
+        starts = sorted({start for start, _ in params.loops} | {params.loop_start})
+
+        now = self._block.time or 0
+
+        if step > 0:
+            later = [s for s in starts if s > now + START_MARKER_MARGIN_MS]
+            target = later[0] if later else starts[0]
+        else:
+            earlier = [s for s in starts if s < now - START_MARKER_MARGIN_MS]
+            target = earlier[-1] if earlier else starts[-1]
+
+        self._block.seek(target)
 
     def rejoin(self):
         """Back to the loop playing, from outside every one."""
