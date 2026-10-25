@@ -232,7 +232,9 @@ class FavouritesManager(ManagerBase):
 
     def cmd_manage_favourites(self) -> None:
         edited = ManageFavouritesDialog.edit(
-            parent=self.parent(), favourites=self.favourites
+            parent=self.parent(),
+            favourites=self.favourites,
+            on_open=self._ctx.commands.add_favourite_videos,
         )
 
         if edited is not None:

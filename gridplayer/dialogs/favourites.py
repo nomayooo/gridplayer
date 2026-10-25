@@ -2,7 +2,7 @@
 video a favourite, in a folder of the viewer's picking, and one to put them
 in order, in folders made, renamed, moved about and removed."""
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QIcon, QKeySequence
 from PyQt5.QtWidgets import (
     QAbstractItemView,
@@ -315,7 +315,13 @@ class AddAllFavouritesDialog(_InFolderDialog):
 
 class ManageFavouritesDialog(QDialog):
     """The favourites as a tree, to be put in order: dragged into folders and
-    about, folders made, anything renamed or removed. Kept only on OK."""
+    about, folders made, anything renamed or removed. Kept only on OK.
+
+    A folder, or videos, opened from it into the grid as they are picked
+    (Open, or a double click), the window staying for more."""
+
+    # the videos to open into the grid
+    open_requested = pyqtSignal(list)
 
     def __init__(self, favourites: Favourites, **kwargs):
         super().__init__(**kwargs)
@@ -355,6 +361,12 @@ class ManageFavouritesDialog(QDialog):
         self.remove_button = QPushButton(translate("Favourites", "Remove"), self)
         self.remove_button.clicked.connect(self.remove_selected)
 
+        self.open_button = QPushButton(
+            QIcon.fromTheme("add-files"), translate("Favourites", "Open"), self
+        )
+        self.open_button.clicked.connect(self.open_selected)
+        self.tree.itemDoubleClicked.connect(lambda item, _: self._open([item]))
+
         QShortcut(QKeySequence.Delete, self.tree, self.remove_selected)
 
         buttons = QDialogButtonBox(
@@ -364,6 +376,7 @@ class ManageFavouritesDialog(QDialog):
         buttons.rejected.connect(self.reject)
 
         actions = QHBoxLayout()
+        actions.addWidget(self.open_button)
         actions.addWidget(self.new_folder_button)
         actions.addWidget(self.rename_button)
         actions.addWidget(self.remove_button)
@@ -430,27 +443,74 @@ class ManageFavouritesDialog(QDialog):
     def favourites(self) -> Favourites:
         """The favourites as the tree has them now."""
 
-        def read(parent_item):
-            items = []
+        return Favourites(self._read(self.tree.invisibleRootItem()))
 
+    def _read(self, parent_item) -> list:
+        items = []
+
+        for index in range(parent_item.childCount()):
+            tree_item = parent_item.child(index)
+            name = tree_item.text(0).strip()
+            video = tree_item.data(0, ITEM_FAVOURITE)
+
+            if video is None:
+                items.append(
+                    FavouriteFolder(
+                        name=name or translate("Favourites", "New Folder"),
+                        items=self._read(tree_item),
+                    )
+                )
+            else:
+                items.append(video.model_copy(update={"name": name or video.name}))
+
+        return items
+
+    def _videos_of(self, tree_items) -> list[FavouriteVideo]:
+        """The videos to open of those picked, in the tree's order: a
+        folder's own, as Open All of its menu opens, and a video itself;
+        each once."""
+
+        picked = {id(tree_item) for tree_item in tree_items}
+        videos = []
+        seen = set()
+
+        def walk(parent_item):
             for index in range(parent_item.childCount()):
                 tree_item = parent_item.child(index)
-                name = tree_item.text(0).strip()
-                video = tree_item.data(0, ITEM_FAVOURITE)
+                is_folder = tree_item.data(0, ITEM_FAVOURITE) is None
 
-                if video is None:
-                    items.append(
-                        FavouriteFolder(
-                            name=name or translate("Favourites", "New Folder"),
-                            items=read(tree_item),
-                        )
+                if id(tree_item) in picked:
+                    own = (
+                        [tree_item.child(i) for i in range(tree_item.childCount())]
+                        if is_folder
+                        else [tree_item]
                     )
-                else:
-                    items.append(video.model_copy(update={"name": name or video.name}))
+                    for each in own:
+                        if each.data(0, ITEM_FAVOURITE) is None or id(each) in seen:
+                            continue
+                        seen.add(id(each))
+                        videos.append(self._read_video(each))
 
-            return items
+                if is_folder:
+                    walk(tree_item)
 
-        return Favourites(read(self.tree.invisibleRootItem()))
+        walk(self.tree.invisibleRootItem())
+
+        return videos
+
+    def _read_video(self, tree_item) -> FavouriteVideo:
+        video = tree_item.data(0, ITEM_FAVOURITE)
+        name = tree_item.text(0).strip()
+        return video.model_copy(update={"name": name or video.name})
+
+    def open_selected(self):
+        self._open(self.tree.selectedItems())
+
+    def _open(self, tree_items):
+        videos = self._videos_of(tree_items)
+
+        if videos:
+            self.open_requested.emit(videos)
 
     # what is done to it
 
@@ -459,6 +519,7 @@ class ManageFavouritesDialog(QDialog):
 
         self.rename_button.setEnabled(len(selected) == 1)
         self.remove_button.setEnabled(bool(selected))
+        self.open_button.setEnabled(bool(self._videos_of(selected)))
 
     def _new_folder_parent(self):
         """Where a new folder goes: into the folder picked, beside the video
@@ -529,8 +590,11 @@ class ManageFavouritesDialog(QDialog):
         return answer == QMessageBox.Yes
 
     @classmethod
-    def edit(cls, parent, favourites: Favourites) -> Favourites | None:
+    def edit(cls, parent, favourites: Favourites, on_open=None) -> Favourites | None:
         dialog = cls(favourites=favourites, parent=parent)
+
+        if on_open is not None:
+            dialog.open_requested.connect(on_open)
 
         if dialog.exec():
             return dialog.favourites()
