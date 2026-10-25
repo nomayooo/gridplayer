@@ -138,7 +138,14 @@ class FavouritesManager(ManagerBase):
 
     def open_favourites(self, here: list, apart: list[list]) -> None:
         """Favourites opened, some here, the others each list of them in a
-        new window of its own; those whose files are gone said to be."""
+        new window of its own; those whose files are gone said to be.
+
+        With none to open here and none open here yet, the first of those
+        for a window of their own opens here instead, the window not left
+        empty for one more."""
+
+        if not here and apart and not self._ctx.commands.is_videos():
+            here, apart = apart[0], apart[1:]
 
         if here:
             self._ctx.commands.add_favourite_videos(here)

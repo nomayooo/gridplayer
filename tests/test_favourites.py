@@ -348,6 +348,39 @@ class TestOpeningInNewWindows:
         # each where it was kept
         assert windows[0][0].current_position == 5000
 
+    def test_into_an_empty_window_the_first_folder_here(self, nested, stored):
+        stored["favourites"].root[0].items.pop(0)
+        manager = _manager()
+        manager._ctx.commands.is_videos = lambda: False
+
+        manager.cmd_open_favourites_folder((0,))
+
+        commands = manager._ctx.commands
+        ((here,), _) = commands.add_favourite_videos.call_args
+        assert [v.name for v in here] == ["a"]
+        windows = [c.args[0] for c in commands.open_in_new_window.call_args_list]
+        assert [[v.uri for v in w] for w in windows] == [[nested["b"]], [nested["c"]]]
+
+    def test_with_videos_open_here_every_folder_apart(self, nested, stored):
+        stored["favourites"].root[0].items.pop(0)
+        manager = _manager()
+        manager._ctx.commands.is_videos = lambda: True
+
+        manager.cmd_open_favourites_folder((0,))
+
+        manager._ctx.commands.add_favourite_videos.assert_not_called()
+        assert manager._ctx.commands.open_in_new_window.call_count == 3
+
+    def test_with_its_own_videos_the_folders_apart_window_empty_or_not(self, nested):
+        manager = _manager()
+        manager._ctx.commands.is_videos = lambda: False
+
+        manager.cmd_open_favourites_folder((0,))
+
+        ((here,), _) = manager._ctx.commands.add_favourite_videos.call_args
+        assert [v.name for v in here] == ["own"]
+        assert manager._ctx.commands.open_in_new_window.call_count == 3
+
     def test_a_folder_of_its_own_videos_alone_opens_here_only(self, nested):
         manager = _manager()
 
