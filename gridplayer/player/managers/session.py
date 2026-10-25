@@ -4,7 +4,7 @@ window's in a folder of its own inside it, numbered from 1, this one first,
 then the others in the order they were opened. Opened again, as any folder
 of folders opens, each window's comes back in a window of its own.
 
-The other windows are asked for theirs (see gridplayer.utils.session_windows),
+The other windows are asked for theirs (see gridplayer.utils.session_server),
 each serving its own while it is open.
 """
 
@@ -17,7 +17,7 @@ from gridplayer.models.favourites import FavouriteVideo
 from gridplayer.player.managers.base import ManagerBase
 from gridplayer.utils.app_dir import get_app_data_dir
 from gridplayer.utils.qt import count_txt, translate
-from gridplayer.utils.session_windows import SessionServer, ask_other_windows
+from gridplayer.utils.session_server import SessionServer, ask_other_windows
 
 # the name of the folder a session is saved in, when it was saved
 SESSION_NAME_FORMAT = "%Y-%m-%d %H:%M:%S"

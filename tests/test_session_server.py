@@ -10,8 +10,8 @@ import time
 
 import pytest
 
-from gridplayer.utils import session_windows
-from gridplayer.utils.session_windows import SessionServer, ask_other_windows
+from gridplayer.utils import session_server
+from gridplayer.utils.session_server import SessionServer, ask_other_windows
 
 
 @pytest.fixture
@@ -53,8 +53,11 @@ class TestInThisProcess:
     def test_one_gone_left_out_and_its_file_let_go(self, registry, servers):
         own = _serve(registry, servers, [])
         gone = registry / "12345-dead.json"
+        address, family = session_server._address("12345-dead")
         gone.write_text(
-            json.dumps({"server": "gridplayer-session-12345-dead", "started": 1})
+            json.dumps(
+                {"address": address, "family": family, "key": "00", "started": 1}
+            )
         )
 
         assert ask_other_windows(registry, own.id) == []
@@ -83,8 +86,10 @@ class TestInThisProcess:
     def test_one_not_answering_in_time_left_out(self, registry, servers, monkeypatch):
         own = _serve(registry, servers, [])
         other = _serve(registry, servers, [{"name": "slow"}])
-        # it takes the question and says nothing
-        monkeypatch.setattr(other, "_read", lambda _socket: None)
+        # it takes the question and never makes its videos
+        monkeypatch.setattr(other, "_answer", lambda _asked: None)
+        other._asked.disconnect()
+        other._asked.connect(other._answer)
 
         started = time.monotonic()
         assert ask_other_windows(registry, own.id, timeout_ms=300) == []
@@ -98,7 +103,7 @@ OTHER_WINDOW = textwrap.dedent(
 
     from PyQt5.QtCore import QCoreApplication, QTimer
 
-    from gridplayer.utils.session_windows import SessionServer
+    from gridplayer.utils.session_server import SessionServer
 
     app = QCoreApplication([])
     server = SessionServer(
@@ -137,4 +142,4 @@ def test_another_process_answers(registry, servers, tmp_path):
 
 
 def test_answered_well_within_the_time_given():
-    assert session_windows.ANSWER_TIMEOUT_MS >= 1000
+    assert session_server.ANSWER_TIMEOUT_MS >= 1000

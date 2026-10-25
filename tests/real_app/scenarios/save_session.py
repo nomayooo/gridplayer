@@ -22,7 +22,7 @@ def scenario(d):
     from gridplayer.player.managers import new_window
     from gridplayer.settings import Settings
     from gridplayer.utils.app_dir import get_app_data_dir
-    from gridplayer.utils.session_windows import SessionServer
+    from gridplayer.utils.session_server import SessionServer
 
     Settings().set("favourites", Favourites())
 

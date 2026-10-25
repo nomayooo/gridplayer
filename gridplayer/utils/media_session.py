@@ -59,7 +59,7 @@ def make_media_session(parent):
             return MprisSession(parent)
 
         if env.IS_WINDOWS:
-            from gridplayer.utils.media_session_windows import SmtcSession
+            from gridplayer.utils.media_session_server import SmtcSession
 
             return SmtcSession(parent)
 
