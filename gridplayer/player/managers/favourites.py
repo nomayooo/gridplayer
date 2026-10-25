@@ -12,8 +12,8 @@ from PyQt5.QtWidgets import QFileDialog
 from gridplayer.dialogs.favourites import (
     AddAllFavouritesDialog,
     AddFavouriteDialog,
+    ImportPlaylistsDialog,
     ManageFavouritesDialog,
-    imported_folder_name,
 )
 from gridplayer.models.favourites import (
     FavouriteFolder,
@@ -228,24 +228,26 @@ class FavouritesManager(ManagerBase):
 
     def cmd_import_playlists(self) -> None:
         """Playlists made favourites, each a folder of its videos named after
-        it: one alone under a name the viewer may change, several under
-        their own. A folder of the name already at the top is filled again,
-        each of its videos replaced as a favourite of the same name is."""
+        it, in a folder of the viewer's picking: one alone under a name the
+        viewer may change, several under their own. A folder of the name
+        already there is filled again, each of its videos replaced as a
+        favourite of the same name is."""
 
         paths = self._ask_playlists()
 
         if not paths:
             return
 
-        if len(paths) == 1:
-            name = imported_folder_name(self.parent(), paths[0].stem)
-            if name is None:
-                return
-            names = [name]
-        else:
-            names = [path.stem for path in paths]
+        asked = ImportPlaylistsDialog.ask(
+            parent=self.parent(),
+            favourites=self.favourites,
+            names=[path.stem for path in paths],
+        )
 
-        favourites = self.favourites
+        if asked is None:
+            return
+
+        favourites, into, names = asked
         problems = []
 
         for path, name in zip(paths, names):
@@ -282,7 +284,9 @@ class FavouritesManager(ManagerBase):
 
             # each playlist's folder with all its videos, those in others too
             favourites.put_videos(
-                _top_folder(favourites, name), _numbered(made), is_folder_only=True
+                _sub_folder(favourites, into, name),
+                _numbered(made),
+                is_folder_only=True,
             )
 
         self._save(favourites)
@@ -342,16 +346,19 @@ def _numbered(made: list[FavouriteVideo]) -> list[FavouriteVideo]:
     return numbered
 
 
-def _top_folder(favourites: Favourites, name: str) -> FolderPath:
-    """The folder of the name at the top, made at the end if there is none."""
+def _sub_folder(favourites: Favourites, parent: FolderPath, name: str) -> FolderPath:
+    """The folder of the name in the one given, made at the end of it if
+    there is none."""
 
-    for index, item in enumerate(favourites.root):
+    items = favourites.items_at(parent)
+
+    for index, item in enumerate(items):
         if isinstance(item, FavouriteFolder) and item.name == name:
-            return (index,)
+            return (*parent, index)
 
-    favourites.root.append(FavouriteFolder(name=name))
+    items.append(FavouriteFolder(name=name))
 
-    return (len(favourites.root) - 1,)
+    return (*parent, len(items) - 1)
 
 
 def _favourite_of(block, name: str | None = None) -> FavouriteVideo:

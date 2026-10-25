@@ -1,7 +1,7 @@
 """Playlists imported as favourites: one into a folder of its name, renamed
-when asked; two at once into folders of their own names, unasked; a folder
-of them opened into the grid, each where its playlist had it, a video in
-two of them in both.
+when asked; two at once into folders of their own names, inside a folder
+made for them in the window; a folder of them opened into the grid, each
+where its playlist had it, a video in two of them in both.
 
 The file picker cannot be answered here; what it gives back is set.
 """
@@ -48,12 +48,9 @@ def scenario(d):
     picked[:] = [evening]
 
     def rename(window):
-        d.check(
-            "its name offered",
-            window.line_edit.text() == "Evening",
-            window.line_edit.text(),
-        )
-        window.line_edit.setText("Night")
+        d.check("its name offered", window.name.text() == "Evening", window.name.text())
+        d.check("into the top", window.selected_folder == ())
+        window.name.setText("Night")
         window.accept()
 
     d.through_modal(
@@ -69,12 +66,28 @@ def scenario(d):
         [v.name for v in videos],
     )
 
-    # two: unasked, each under its own name
+    # two: each under its own name, into a folder made for them
     picked[:] = [one, two]
-    d.act(c, "Import Playlists to Favourites")
-    d.pump()
-    names = [f.name for f in Settings().get("favourites").root]
-    d.check("two more, named after them", names == ["Night", "One", "Two"], names)
+
+    def into_new_folder(window):
+        from gridplayer.dialogs import favourites as dialogs
+
+        d.check("no name asked", window.name is None)
+        typed = dialogs.QCustomTextInput.get_text
+        dialogs.QCustomTextInput.get_text = lambda *_a, **_k: "Playlists"
+        try:
+            window.new_folder()
+        finally:
+            dialogs.QCustomTextInput.get_text = typed
+        window.accept()
+
+    d.through_modal(
+        lambda: d.act(c, "Import Playlists to Favourites"), "two", into_new_folder
+    )
+    root = Settings().get("favourites").root
+    d.check("the folder made", [f.name for f in root] == ["Night", "Playlists"], root)
+    names = [f.name for f in root[1].items]
+    d.check("two in it, named after them", names == ["One", "Two"], names)
 
     # the folder opened into the grid, each where the playlist had it
     d.run(c, "open_favourites_folder", (0,))

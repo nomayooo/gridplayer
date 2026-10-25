@@ -17,6 +17,7 @@ from gridplayer.dialogs import favourites as dialogs
 from gridplayer.dialogs.favourites import (
     AddAllFavouritesDialog,
     AddFavouriteDialog,
+    ImportPlaylistsDialog,
     ManageFavouritesDialog,
 )
 from gridplayer.models.favourites import (
@@ -766,9 +767,14 @@ def _playlist(path, *videos):
 
 @pytest.fixture
 def importing(stored, monkeypatch):
-    """Playlists picked, the folder name given or left; what was said."""
+    """Playlists picked, the window answered (by default: into the top,
+    under their own names); what was asked, and what was said."""
 
-    state = SimpleNamespace(picked=[], name=lambda name: name, asked=[])
+    state = SimpleNamespace(
+        picked=[],
+        answer=lambda favourites, names: (favourites, (), names),
+        asked=[],
+    )
 
     monkeypatch.setattr(
         manager_module.QFileDialog,
@@ -776,11 +782,11 @@ def importing(stored, monkeypatch):
         lambda *_a, **_k: ([str(p) for p in state.picked], ""),
     )
 
-    def folder_name(_parent, name):
-        state.asked.append(name)
-        return state.name(name)
+    def ask(parent, favourites, names):
+        state.asked.append(names)
+        return state.answer(favourites, names)
 
-    monkeypatch.setattr(manager_module, "imported_folder_name", folder_name)
+    monkeypatch.setattr(manager_module.ImportPlaylistsDialog, "ask", ask)
 
     manager = _manager()
     state.errors = []
@@ -805,7 +811,7 @@ class TestImportingPlaylists:
 
         importing.manager.cmd_import_playlists()
 
-        assert importing.asked == ["Mix"]
+        assert importing.asked == [["Mix"]]
         root = stored["favourites"].root
         assert [i.name for i in root] == ["Kept", "Mix"]
         videos = root[1].items
@@ -831,11 +837,51 @@ class TestImportingPlaylists:
 
         assert stored["favourites"].root[1].items[0].position is None
 
+    def test_into_the_folder_picked_or_made(self, importing, stored, tmp_path):
+        from gridplayer.models.video import Video
+
+        def into_made(favourites, names):
+            favourites.root.append(FavouriteFolder(name="Playlists"))
+            return favourites, (1,), names
+
+        importing.answer = into_made
+        importing.picked = [
+            _playlist(tmp_path / "One.gpls", Video(uri=HERE)),
+            _playlist(tmp_path / "Two.gpls", Video(uri=NEW)),
+        ]
+
+        importing.manager.cmd_import_playlists()
+
+        root = stored["favourites"].root
+        assert [i.name for i in root] == ["Kept", "Playlists"]
+        assert [i.name for i in root[1].items] == ["One", "Two"]
+        assert [v.path for v in root[1].items[1].items] == [NEW]
+
+    def test_again_into_the_same_folder_picked(self, importing, stored, tmp_path):
+        from gridplayer.models.video import Video
+
+        stored["favourites"] = Favourites(
+            [
+                FavouriteFolder(
+                    name="Playlists",
+                    items=[FavouriteFolder(name="Mix", items=[_video("Old")])],
+                )
+            ]
+        )
+        importing.answer = lambda favourites, names: (favourites, (0,), names)
+        importing.picked = [_playlist(tmp_path / "Mix.gpls", Video(uri=NEW))]
+
+        importing.manager.cmd_import_playlists()
+
+        mix = stored["favourites"].root[0].items
+        assert [i.name for i in mix] == ["Mix"]
+        assert [v.name for v in mix[0].items] == ["Old", NEW.name]
+
     def test_one_renamed(self, importing, stored, tmp_path):
         from gridplayer.models.video import Video
 
         importing.picked = [_playlist(tmp_path / "Mix.gpls", Video(uri=HERE))]
-        importing.name = lambda _name: "Evening"
+        importing.answer = lambda favourites, _names: (favourites, (), ["Evening"])
 
         importing.manager.cmd_import_playlists()
 
@@ -846,7 +892,7 @@ class TestImportingPlaylists:
 
         before = stored["favourites"].model_copy(deep=True)
         importing.picked = [_playlist(tmp_path / "Mix.gpls", Video(uri=HERE))]
-        importing.name = lambda _name: None
+        importing.answer = lambda _favourites, _names: None
 
         importing.manager.cmd_import_playlists()
 
@@ -862,7 +908,7 @@ class TestImportingPlaylists:
 
         importing.manager.cmd_import_playlists()
 
-        assert importing.asked == []
+        assert importing.asked == [["One", "Two"]]
         root = stored["favourites"].root
         assert [i.name for i in root] == ["Kept", "One", "Two"]
         assert [v.path for v in root[2].items] == [NEW]
@@ -942,6 +988,37 @@ class TestImportingPlaylists:
 
         assert stored["favourites"] == before
         assert importing.asked == []
+
+
+class TestTheImportWindow:
+    def test_one_named_as_it_is_or_renamed(self):
+        dialog = ImportPlaylistsDialog(_favourites(), names=["Mix"])
+
+        assert dialog.windowTitle() == "Import Playlist"
+        assert dialog.names == ["Mix"]
+        dialog.name.setText(" Evening ")
+        assert dialog.names == ["Evening"]
+
+        dialog.name.setText(" ")
+        assert not dialog.ok_button.isEnabled()
+
+    def test_several_under_their_own_names_counted(self):
+        dialog = ImportPlaylistsDialog(_favourites(), names=["One", "Two"])
+
+        assert dialog.windowTitle() == "Import Playlists"
+        assert dialog.name is None
+        assert dialog.names == ["One", "Two"]
+        assert "2" in dialog.count_note.text()
+
+    def test_into_the_top_unless_another_is_picked(self, monkeypatch):
+        dialog = ImportPlaylistsDialog(_favourites(), names=["Mix"])
+        assert dialog.selected_folder == ()
+
+        _typed(monkeypatch, "Playlists")
+        dialog.new_folder()
+
+        assert dialog.selected_folder == (3,)
+        assert dialog.favourites.root[3].name == "Playlists"
 
 
 class TestTheAddAllWindow:
