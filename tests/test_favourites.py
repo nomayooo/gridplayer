@@ -231,7 +231,7 @@ class TestTheMenu:
         ]
         assert menu[-1]["func"] == ("open_favourites_folder", (1,))
 
-    def test_a_folder_of_folders_alone_has_no_open_all(self, stored):
+    def test_a_folder_of_empty_folders_alone_has_no_open_all(self, stored):
         stored["favourites"] = Favourites(
             [FavouriteFolder(name="A", items=[FavouriteFolder(name="B")])]
         )
@@ -297,6 +297,90 @@ def adder():
     manager.error.connect(manager.errors.append)
 
     return manager
+
+
+class TestOpeningInNewWindows:
+    @pytest.fixture
+    def nested(self, stored, tmp_path):
+        files = {}
+        for name in ("own", "a", "b", "c"):
+            files[name] = tmp_path / f"{name}.mp4"
+            files[name].write_bytes(b"video")
+
+        def fav(name, **fields):
+            return FavouriteVideo(name=name, path=files[name], **fields)
+
+        stored["favourites"] = Favourites(
+            [
+                FavouriteFolder(
+                    name="Playlists",
+                    items=[
+                        fav("own"),
+                        FavouriteFolder(name="One", items=[fav("a", position=5000)]),
+                        FavouriteFolder(
+                            name="Two",
+                            items=[
+                                fav("b"),
+                                FavouriteFolder(name="Deep", items=[fav("c")]),
+                            ],
+                        ),
+                    ],
+                )
+            ]
+        )
+        return files
+
+    def test_its_own_here_each_folder_in_a_window_of_its_own(self, nested):
+        manager = _manager()
+
+        manager.cmd_open_favourites_folder((0,))
+
+        commands = manager._ctx.commands
+        ((here,), _) = commands.add_favourite_videos.call_args
+        assert [v.name for v in here] == ["own"]
+
+        windows = [c.args[0] for c in commands.open_in_new_window.call_args_list]
+        assert [[v.uri for v in w] for w in windows] == [
+            [nested["a"]],
+            [nested["b"]],
+            [nested["c"]],
+        ]
+        # each where it was kept
+        assert windows[0][0].current_position == 5000
+
+    def test_a_folder_of_its_own_videos_alone_opens_here_only(self, nested):
+        manager = _manager()
+
+        manager.cmd_open_favourites_folder((0, 1))
+
+        manager._ctx.commands.add_favourite_videos.assert_called_once()
+        manager._ctx.commands.open_in_new_window.assert_not_called()
+
+    def test_files_gone_said_the_rest_opened(self, nested):
+        nested["b"].unlink()
+        manager = _manager()
+        errors = []
+        manager.error.connect(errors.append)
+
+        manager.cmd_open_favourites_folder((0,))
+
+        windows = [
+            c.args[0] for c in manager._ctx.commands.open_in_new_window.call_args_list
+        ]
+        # Two had only b, gone: no window for it
+        assert [[v.uri for v in w] for w in windows] == [
+            [nested["a"]],
+            [nested["c"]],
+        ]
+        assert len(errors) == 1
+        assert str(nested["b"]) in errors[0]
+
+    def test_open_all_offered_for_a_folder_of_folders(self, nested, stored):
+        stored["favourites"].root[0].items.pop(0)
+
+        menu = _manager().menu_generator_favourites_folder((0,))
+
+        assert menu[-1]["func"] == ("open_favourites_folder", (0,))
 
 
 class TestIntoTheGrid:
@@ -531,7 +615,7 @@ class TestMakingOne:
 
     def test_opened_from_the_manager_into_the_grid(self, stored, monkeypatch):
         def edit(parent, favourites, on_open):
-            on_open([favourites.root[0]])
+            on_open([favourites.root[0]], [])
             return None
 
         monkeypatch.setattr(manager_module.ManageFavouritesDialog, "edit", edit)
@@ -542,6 +626,7 @@ class TestMakingOne:
         manager._ctx.commands.add_favourite_videos.assert_called_once_with(
             [stored["favourites"].root[0]]
         )
+        manager._ctx.commands.open_in_new_window.assert_not_called()
 
     def test_put_in_order_not_kept_on_cancel(self, stored, monkeypatch):
         before = stored["favourites"]
@@ -1264,20 +1349,26 @@ class TestTheManageWindow:
         assert items[-1] == FavouriteFolder(name="Made")
 
     def _opened(self, dialog):
+        """What each open asked for: the names here, and those of each new
+        window."""
+
         opened = []
-        dialog.open_requested.connect(opened.append)
+        dialog.open_requested.connect(
+            lambda here, apart: opened.append(
+                ([v.name for v in here], [[v.name for v in w] for w in apart])
+            )
+        )
         return opened
 
-    def test_a_folder_opened_with_its_own_videos(self):
+    def test_a_folder_opened_its_own_here_its_folders_apart(self):
         dialog = ManageFavouritesDialog(_favourites())
         opened = self._opened(dialog)
         _tree_item(dialog, 1).setSelected(True)
 
         dialog.open_selected()
 
-        ((videos,),) = [opened]
-        # its own, not its folder's: as Open All of its menu
-        assert [v.name for v in videos] == ["Song"]
+        # Song its own; Live's Gig in a new window
+        assert opened == [(["Song"], [["Gig"]])]
 
     def test_double_clicked_opened(self):
         dialog = ManageFavouritesDialog(_favourites())
@@ -1286,29 +1377,60 @@ class TestTheManageWindow:
         item = _tree_item(dialog, 1, 1)
         dialog.tree.itemDoubleClicked.emit(item, 0)
 
-        assert [[v.name for v in videos] for videos in opened] == [["Gig"]]
+        assert opened == [(["Gig"], [])]
 
     def test_videos_and_folders_together_each_once_in_order(self):
         dialog = ManageFavouritesDialog(_favourites())
         opened = self._opened(dialog)
         _tree_item(dialog, 1, 0).setSelected(True)
+        _tree_item(dialog, 1, 1).setSelected(True)
         _tree_item(dialog, 1).setSelected(True)
         _tree_item(dialog, 0).setSelected(True)
 
         dialog.open_selected()
 
-        assert [v.name for v in opened[0]] == ["Top", "Song"]
+        # those within Music go with it: Live in a window of its own once
+        assert opened == [(["Top", "Song"], [["Gig"]])]
+
+    def test_a_folder_of_folders_alone_opens_them_apart(self):
+        favourites = Favourites(
+            [
+                FavouriteFolder(
+                    name="Playlists",
+                    items=[
+                        FavouriteFolder(name="One", items=[_video("a"), _video("b")]),
+                        FavouriteFolder(
+                            name="Two",
+                            items=[
+                                _video("c"),
+                                FavouriteFolder(name="Deep", items=[_video("d")]),
+                            ],
+                        ),
+                        FavouriteFolder(name="Empty"),
+                    ],
+                )
+            ]
+        )
+        dialog = ManageFavouritesDialog(favourites)
+        opened = self._opened(dialog)
+        _tree_item(dialog, 0).setSelected(True)
+
+        assert dialog.open_button.isEnabled()
+        dialog.open_selected()
+
+        assert opened == [([], [["a", "b"], ["c"], ["d"]])]
 
     def test_opened_as_renamed(self):
         dialog = ManageFavouritesDialog(_favourites())
-        opened = self._opened(dialog)
+        videos = []
+        dialog.open_requested.connect(lambda here, _apart: videos.extend(here))
         _tree_item(dialog, 0).setText(0, "Renamed")
         _tree_item(dialog, 0).setSelected(True)
 
         dialog.open_selected()
 
-        assert opened[0][0].name == "Renamed"
-        assert opened[0][0].loops == [(1000, 2000)]
+        assert videos[0].name == "Renamed"
+        assert videos[0].loops == [(1000, 2000)]
 
     def test_open_only_with_something_to_open(self):
         dialog = ManageFavouritesDialog(_favourites())

@@ -11,11 +11,13 @@ until it is saved.
 import os
 import tempfile
 from pathlib import Path
+from uuid import uuid4
 
 from PyQt5.QtCore import QProcess, pyqtSignal
 
 from gridplayer.models.media_list import as_path
 from gridplayer.models.moved_cells import MovedCell, MovedCells
+from gridplayer.models.video import VideoBlockMime
 from gridplayer.player.managers.base import ManagerBase
 from gridplayer.utils.new_window import new_window_command
 from gridplayer.utils.qt import translate
@@ -47,6 +49,7 @@ class NewWindowManager(ManagerBase):
             "is_any_cells_selected": self.is_any_cells_selected,
             "selected_cells": self._selected_blocks,
             "move_to_new_window": self.cmd_move_to_new_window,
+            "open_in_new_window": self.cmd_open_in_new_window,
             "open_moved_cells": self.open_moved_cells,
         }
 
@@ -171,6 +174,31 @@ class NewWindowManager(ManagerBase):
             ]
         )
 
+        if not self._start_new_window(moved):
+            return
+
+        self.cmd_clear_cell_selection()
+
+        for block in blocks:
+            block.close()
+
+    def cmd_open_in_new_window(self, videos: list) -> bool:
+        """Videos opened in a new window of their own, as cells moved there
+        are, this one left as it is."""
+
+        if not videos:
+            return False
+
+        moved = MovedCells(
+            cells=[
+                MovedCell(cell=VideoBlockMime(id=str(uuid4()), video=video))
+                for video in videos
+            ]
+        )
+
+        return self._start_new_window(moved)
+
+    def _start_new_window(self, moved: MovedCells) -> bool:
         moved_file = _write_moved_cells(moved)
 
         program, args = new_window_command(moved_file)
@@ -181,12 +209,8 @@ class NewWindowManager(ManagerBase):
             self._log.error(f"Couldn't start a new window: {program} {args}")
             moved_file.unlink(missing_ok=True)
             self.error.emit(translate("Error", "Couldn't open a new window!"))
-            return
 
-        self.cmd_clear_cell_selection()
-
-        for block in blocks:
-            block.close()
+        return is_started
 
     # taking them in
 

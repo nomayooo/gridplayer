@@ -29,6 +29,8 @@ from gridplayer.models.favourites import (
     Favourites,
     FavouriteVideo,
     FolderPath,
+    folders_within,
+    videos_in,
 )
 from gridplayer.utils.qt import count_txt, translate
 from gridplayer.utils.time_txt import ms_time_txt
@@ -387,10 +389,11 @@ class ManageFavouritesDialog(QDialog):
     about, folders made, anything renamed or removed. Kept only on OK.
 
     A folder, or videos, opened from it into the grid as they are picked
-    (Open, or a double click), the window staying for more."""
+    (Open, or a double click), the window staying for more: a folder's
+    own videos here, those of each folder it holds in a new window each."""
 
-    # the videos to open into the grid
-    open_requested = pyqtSignal(list)
+    # the videos to open here, and the lists of them for new windows
+    open_requested = pyqtSignal(list, list)
 
     def __init__(self, favourites: Favourites, **kwargs):
         super().__init__(**kwargs)
@@ -534,38 +537,42 @@ class ManageFavouritesDialog(QDialog):
 
         return items
 
-    def _videos_of(self, tree_items) -> list[FavouriteVideo]:
-        """The videos to open of those picked, in the tree's order: a
-        folder's own, as Open All of its menu opens, and a video itself;
-        each once."""
+    def _to_open(self, tree_items) -> tuple[list, list[list]]:
+        """What the ones picked open, in the tree's order: here, a folder's
+        own videos, as Open All of its menu opens, and a video itself; in a
+        new window each, the videos of each folder a folder picked holds.
+        One within a folder picked goes with that folder."""
 
         picked = {id(tree_item) for tree_item in tree_items}
-        videos = []
-        seen = set()
+        here, apart = [], []
+
+        def is_within_picked(tree_item):
+            parent = tree_item.parent()
+            while parent is not None:
+                if id(parent) in picked:
+                    return True
+                parent = parent.parent()
+            return False
 
         def walk(parent_item):
             for index in range(parent_item.childCount()):
                 tree_item = parent_item.child(index)
                 is_folder = tree_item.data(0, ITEM_FAVOURITE) is None
 
-                if id(tree_item) in picked:
-                    own = (
-                        [tree_item.child(i) for i in range(tree_item.childCount())]
-                        if is_folder
-                        else [tree_item]
-                    )
-                    for each in own:
-                        if each.data(0, ITEM_FAVOURITE) is None or id(each) in seen:
-                            continue
-                        seen.add(id(each))
-                        videos.append(self._read_video(each))
+                if id(tree_item) in picked and not is_within_picked(tree_item):
+                    if is_folder:
+                        items = self._read(tree_item)
+                        here.extend(videos_in(items))
+                        apart.extend(folders_within(items))
+                    else:
+                        here.append(self._read_video(tree_item))
 
                 if is_folder:
                     walk(tree_item)
 
         walk(self.tree.invisibleRootItem())
 
-        return videos
+        return here, apart
 
     def _read_video(self, tree_item) -> FavouriteVideo:
         video = tree_item.data(0, ITEM_FAVOURITE)
@@ -576,10 +583,10 @@ class ManageFavouritesDialog(QDialog):
         self._open(self.tree.selectedItems())
 
     def _open(self, tree_items):
-        videos = self._videos_of(tree_items)
+        here, apart = self._to_open(tree_items)
 
-        if videos:
-            self.open_requested.emit(videos)
+        if here or apart:
+            self.open_requested.emit(here, apart)
 
     # what is done to it
 
@@ -588,7 +595,7 @@ class ManageFavouritesDialog(QDialog):
 
         self.rename_button.setEnabled(len(selected) == 1)
         self.remove_button.setEnabled(bool(selected))
-        self.open_button.setEnabled(bool(self._videos_of(selected)))
+        self.open_button.setEnabled(any(self._to_open(selected)))
 
     def _new_folder_parent(self):
         """Where a new folder goes: into the folder picked, beside the video

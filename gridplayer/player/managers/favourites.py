@@ -20,10 +20,12 @@ from gridplayer.models.favourites import (
     Favourites,
     FavouriteVideo,
     FolderPath,
+    folders_within,
     videos_in,
 )
 from gridplayer.models.playlist import Playlist
 from gridplayer.models.video import Video
+from gridplayer.player.managers.add_videos import favourite_as_video
 from gridplayer.player.managers.base import ManagerBase
 from gridplayer.player.managers.recent_list import elide_str
 from gridplayer.settings import Settings
@@ -69,8 +71,9 @@ class FavouritesManager(ManagerBase):
 
     def menu_generator_favourites_folder(self, folder: FolderPath):
         menu = self._menu_of(folder)
+        items = self._items_at(folder)
 
-        if not videos_in(self._items_at(folder)):
+        if not videos_in(items) and not folders_within(items):
             return menu
 
         return [
@@ -126,10 +129,43 @@ class FavouritesManager(ManagerBase):
         self._ctx.commands.add_favourite_videos([favourite])
 
     def cmd_open_favourites_folder(self, folder: FolderPath) -> None:
-        videos = videos_in(self._items_at(folder))
+        """A folder's own videos opened here, and those of each folder it
+        holds, at any depth, each in a new window of its own."""
 
-        if videos:
-            self._ctx.commands.add_favourite_videos(videos)
+        items = self._items_at(folder)
+
+        self.open_favourites(videos_in(items), folders_within(items))
+
+    def open_favourites(self, here: list, apart: list[list]) -> None:
+        """Favourites opened, some here, the others each list of them in a
+        new window of its own; those whose files are gone said to be."""
+
+        if here:
+            self._ctx.commands.add_favourite_videos(here)
+
+        missing = []
+
+        for favourites in apart:
+            videos = []
+
+            for favourite in favourites:
+                if not favourite.path.is_file():
+                    missing.append(str(favourite.path))
+                    continue
+
+                video = favourite_as_video(favourite)
+                if video is not None:
+                    videos.append(video)
+
+            if videos:
+                self._ctx.commands.open_in_new_window(videos)
+
+        if missing:
+            self.error.emit(
+                "{}\n\n{}".format(
+                    translate("Error", "File not found!"), "\n".join(missing)
+                )
+            )
 
     # making and keeping them
 
@@ -312,7 +348,7 @@ class FavouritesManager(ManagerBase):
         edited = ManageFavouritesDialog.edit(
             parent=self.parent(),
             favourites=self.favourites,
-            on_open=self._ctx.commands.add_favourite_videos,
+            on_open=self.open_favourites,
         )
 
         if edited is not None:

@@ -184,3 +184,22 @@ def videos_in(items: list[FavouriteItem]) -> list[FavouriteVideo]:
     """The videos a folder holds itself, not those of its folders."""
 
     return [item for item in items if isinstance(item, FavouriteVideo)]
+
+
+def folders_within(items: list[FavouriteItem]) -> list[list[FavouriteVideo]]:
+    """The videos of each folder a folder holds, at any depth, in the order
+    shown, each folder's own apart: those with none left out."""
+
+    found = []
+
+    for item in items:
+        if not isinstance(item, FavouriteFolder):
+            continue
+
+        own = videos_in(item.items)
+        if own:
+            found.append(own)
+
+        found.extend(folders_within(item.items))
+
+    return found
