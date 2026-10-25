@@ -159,6 +159,7 @@ class VideoBlocksManager(ManagerBase):
     all_loop_chapter = pyqtSignal()
     all_reset_loop = pyqtSignal()
     all_remove_last_loop = pyqtSignal()
+    all_undo_loop_marker = pyqtSignal()
     all_previous_loop = pyqtSignal()
     all_next_loop = pyqtSignal()
     all_set_end_action = pyqtSignal(VideoEndAction)
@@ -878,6 +879,7 @@ class VideoBlocksManager(ManagerBase):
             (self.all_loop_chapter, vb.chapters.loop),
             (self.all_reset_loop, vb.loop.reset),
             (self.all_remove_last_loop, vb.loop.remove_last),
+            (self.all_undo_loop_marker, vb.loop.undo_marker),
             (self.all_previous_loop, vb.loop.previous),
             (self.all_next_loop, vb.loop.next),
             (self.all_set_end_action, vb.set_end_action),
