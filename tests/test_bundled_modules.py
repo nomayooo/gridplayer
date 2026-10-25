@@ -59,3 +59,37 @@ def test_no_module_left_out_of_a_build_is_imported_as_the_app_loads(spec):
 
 def test_the_specs_are_found():
     assert {spec.stem for spec in SPECS} >= {"pyinstaller_win", "pyinstaller_mac"}
+
+
+def _all_imports(path: Path) -> list[tuple[int, str]]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    found = []
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found.extend((node.lineno, alias.name) for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            found.append((node.lineno, node.module))
+
+    return found
+
+
+def test_every_module_of_the_app_imported_anywhere_is_there():
+    """Those imported only on one platform too, in a function or a branch
+    the platform the tests run on never reaches."""
+
+    package = REPO / "gridplayer"
+
+    def exists(module: str) -> bool:
+        parts = module.split(".")
+        path = REPO.joinpath(*parts)
+        return path.with_suffix(".py").is_file() or (path / "__init__.py").is_file()
+
+    missing = [
+        f"{path.relative_to(REPO)}:{line} imports {module}"
+        for path in sorted(package.rglob("*.py"))
+        for line, module in _all_imports(path)
+        if module.split(".")[0] == "gridplayer" and not exists(module)
+    ]
+
+    assert missing == []
