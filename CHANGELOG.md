@@ -32,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+- Import playlists as favourites, each into a folder of its name, one renamed as wished or several at once ([#24](https://github.com/nomayooo/gridplayer/pull/24))
 - Add A-B Loop (L) to set a loop's start and then its end on one key, and Shift+L for every video ([#19](https://github.com/nomayooo/gridplayer/pull/19))
 - Add Delete File (Shift+Delete) to delete a video's file permanently, or the files of the videos selected, once asked ([#18](https://github.com/nomayooo/gridplayer/pull/18))
 - Select videos with Ctrl+Click, or a range with Shift+Click (Ctrl+Shift+Click to add one), as in Windows Explorer, and move them to a new window with everything they had: position, loops, bookmarks and list, or add them to favourites all at once ([#15](https://github.com/nomayooo/gridplayer/pull/15)), ([#20](https://github.com/nomayooo/gridplayer/pull/20)), ([#21](https://github.com/nomayooo/gridplayer/pull/21))
