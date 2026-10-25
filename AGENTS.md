@@ -202,6 +202,22 @@ to the zip: list the run's artifacts and give
 for the portable zip. It works for anyone signed in to GitHub, until the
 artifact expires after 7 days.
 
+## Branching a new feature
+
+When the user asks for a new feature while pull requests for other features
+are still open, branch from the most recent of those branches, not from
+`master`, so that its Windows build has everything not yet merged. With none
+open, branch from `master`.
+
+* The pull request still targets `master`; its description says which pull
+  request it builds on. Until that one is merged it shows both changes.
+* Once the one below is merged, merge `master` into the branch, so that the
+  pull request shows its own changes alone.
+* Merging the newer pull request first merges the older one with it: say so
+  whenever asked to merge one that sits on another.
+* A change the user wants merged straight away, such as one to this file,
+  branches from `master`.
+
 ## Changelog
 
 A pull request that changes what a user sees or does adds its own entry to
