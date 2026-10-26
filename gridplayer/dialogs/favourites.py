@@ -2,7 +2,16 @@
 video a favourite, in a folder of the viewer's picking, and one to put them
 in order, in folders made, renamed, moved about and removed."""
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from math import inf
+
+from PyQt5.QtCore import (
+    QDateTime,
+    QItemSelectionModel,
+    QLocale,
+    Qt,
+    QTimer,
+    pyqtSignal,
+)
 from PyQt5.QtGui import QIcon, QKeySequence
 from PyQt5.QtWidgets import (
     QAbstractItemView,
@@ -29,9 +38,13 @@ from gridplayer.models.favourites import (
     Favourites,
     FavouriteVideo,
     FolderPath,
+    added_now,
     folders_within,
     videos_in,
 )
+from gridplayer.params.static import FavouritesSort
+from gridplayer.settings import Settings
+from gridplayer.utils.next_file import natural_key
 from gridplayer.utils.qt import count_txt, translate
 from gridplayer.utils.time_txt import ms_time_txt
 
@@ -39,12 +52,47 @@ FOLDER_INDENT = "    "
 
 # what an item of the tree is: a video's favourite, or nothing for a folder
 ITEM_FAVOURITE = Qt.UserRole
+# when a folder was added, None for one added before favourites kept it
+ITEM_ADDED = Qt.UserRole + 1
+# where it is in the folder's own order, while they are shown sorted
+ITEM_ORDER = Qt.UserRole + 2
+
+COLUMN_ADDED = 4
 
 
 def _loop_start_txt(loop_start: int) -> str:
     return translate("Favourites", "start at {TIME}").format(
         TIME=ms_time_txt(loop_start, strip=True)
     )
+
+
+def _added_txt(added) -> str:
+    if added is None:
+        return ""
+
+    return QLocale().toString(
+        QDateTime.fromSecsSinceEpoch(int(added.timestamp())), QLocale.ShortFormat
+    )
+
+
+def _added_of(tree_item):
+    video = tree_item.data(0, ITEM_FAVOURITE)
+    return tree_item.data(0, ITEM_ADDED) if video is None else video.added
+
+
+def _added_key(added) -> float:
+    return -inf if added is None else added.timestamp()
+
+
+def _all_within(parent_item) -> list:
+    found = []
+
+    for index in range(parent_item.childCount()):
+        child = parent_item.child(index)
+        found.append(child)
+        found.extend(_all_within(child))
+
+    return found
 
 
 def _new_folder_name(parent) -> str | None:
@@ -118,7 +166,7 @@ class _InFolderDialog(QDialog):
             return
 
         parent = self.selected_folder
-        self.favourites.add(parent, FavouriteFolder(name=name))
+        self.favourites.add(parent, FavouriteFolder(name=name, added=added_now()))
 
         new_path = (*parent, len(self.favourites.items_at(parent)) - 1)
         self.fill_folders(selected=new_path)
@@ -390,7 +438,12 @@ class ManageFavouritesDialog(QDialog):
 
     A folder, or videos, opened from it into the grid as they are picked
     (Open, or a double click), the window staying for more: a folder's
-    own videos here, those of each folder it holds in a new window each."""
+    own videos here, those of each folder it holds in a new window each.
+
+    Shown in their own order, or sorted by name or by when they were added,
+    each folder's own, the sort kept for the next time; their own order is
+    the one kept on OK all the same, and the menu's. Dragged about only in
+    it: sorted, there is no place to drop one in."""
 
     # the videos to open here, and the lists of them for new windows
     open_requested = pyqtSignal(list, list)
@@ -399,16 +452,17 @@ class ManageFavouritesDialog(QDialog):
         super().__init__(**kwargs)
 
         self.setWindowTitle(translate("Favourites", "Manage Favourites"))
-        self.resize(640, 420)
+        self.resize(860, 440)
 
         self.tree = QTreeWidget(self)
-        self.tree.setColumnCount(4)
+        self.tree.setColumnCount(5)
         self.tree.setHeaderLabels(
             [
                 translate("Favourites", "Name"),
                 translate("Favourites", "A-B Loops"),
                 translate("Favourites", "Opens At"),
                 translate("Favourites", "File"),
+                translate("Favourites", "Date Added"),
             ]
         )
         self.tree.header().setSectionResizeMode(0, QHeaderView.Interactive)
@@ -441,6 +495,26 @@ class ManageFavouritesDialog(QDialog):
 
         QShortcut(QKeySequence.Delete, self.tree, self.remove_selected)
 
+        self.sort_box = QComboBox(self)
+        self.sort_box.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+        for sort, title in (
+            (FavouritesSort.OWN, translate("Favourites", "Your Order")),
+            (FavouritesSort.NAME, translate("Favourites", "Name (A to Z)")),
+            (FavouritesSort.NAME_DESC, translate("Favourites", "Name (Z to A)")),
+            (
+                FavouritesSort.ADDED_DESC,
+                translate("Favourites", "Date Added (Newest First)"),
+            ),
+            (
+                FavouritesSort.ADDED,
+                translate("Favourites", "Date Added (Oldest First)"),
+            ),
+        ):
+            self.sort_box.addItem(title, sort)
+
+        sort_label = QLabel(translate("Favourites", "Sort by:"), self)
+        sort_label.setBuddy(self.sort_box)
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self
         )
@@ -453,6 +527,8 @@ class ManageFavouritesDialog(QDialog):
         actions.addWidget(self.rename_button)
         actions.addWidget(self.remove_button)
         actions.addStretch(1)
+        actions.addWidget(sort_label)
+        actions.addWidget(self.sort_box)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.tree, 1)
@@ -460,25 +536,39 @@ class ManageFavouritesDialog(QDialog):
         layout.addWidget(buttons)
 
         self.tree.itemSelectionChanged.connect(self._update_buttons)
+        self.tree.itemChanged.connect(self._renamed)
+
+        self.sort = FavouritesSort.OWN
+        # the next place in the folders' own order, for one made while sorted
+        self._next_order = 0
+        self._is_sorting = False
 
         self._fill(self.tree.invisibleRootItem(), favourites.root)
         self.tree.expandAll()
         self._update_buttons()
+
+        sort = Settings().get("favourites/sort")
+        self.sort_box.setCurrentIndex(max(self.sort_box.findData(sort), 0))
+        self.sort_by(self.sort_box.currentData())
+        self.sort_box.currentIndexChanged.connect(
+            lambda _: self._sort_picked(self.sort_box.currentData())
+        )
 
     # the tree
 
     def _fill(self, parent_item, items):
         for item in items:
             if isinstance(item, FavouriteFolder):
-                tree_item = self._folder_item(item.name)
+                tree_item = self._folder_item(item.name, item.added)
                 parent_item.addChild(tree_item)
                 self._fill(tree_item, item.items)
             else:
                 parent_item.addChild(self._video_item(item))
 
-    def _folder_item(self, name: str) -> QTreeWidgetItem:
-        tree_item = QTreeWidgetItem([name, "", "", ""])
+    def _folder_item(self, name: str, added) -> QTreeWidgetItem:
+        tree_item = QTreeWidgetItem([name, "", "", "", _added_txt(added)])
         tree_item.setIcon(0, QIcon.fromTheme("favourites-folder"))
+        tree_item.setData(0, ITEM_ADDED, added)
         tree_item.setFlags(
             Qt.ItemIsEnabled
             | Qt.ItemIsSelectable
@@ -498,7 +588,13 @@ class ManageFavouritesDialog(QDialog):
         )
 
         tree_item = QTreeWidgetItem(
-            [video.name, ", ".join(loops), opens_at, str(video.path)]
+            [
+                video.name,
+                ", ".join(loops),
+                opens_at,
+                str(video.path),
+                _added_txt(video.added),
+            ]
         )
         tree_item.setIcon(0, QIcon.fromTheme("add-files"))
         tree_item.setToolTip(3, str(video.path))
@@ -517,11 +613,12 @@ class ManageFavouritesDialog(QDialog):
 
         return Favourites(self._read(self.tree.invisibleRootItem()))
 
-    def _read(self, parent_item) -> list:
+    def _read(self, parent_item, is_as_shown: bool = False) -> list:
+        """A folder's, in their own order, or as shown."""
+
         items = []
 
-        for index in range(parent_item.childCount()):
-            tree_item = parent_item.child(index)
+        for tree_item in self._children(parent_item, is_as_shown):
             name = tree_item.text(0).strip()
             video = tree_item.data(0, ITEM_FAVOURITE)
 
@@ -529,7 +626,8 @@ class ManageFavouritesDialog(QDialog):
                 items.append(
                     FavouriteFolder(
                         name=name or translate("Favourites", "New Folder"),
-                        items=self._read(tree_item),
+                        items=self._read(tree_item, is_as_shown),
+                        added=tree_item.data(0, ITEM_ADDED),
                     )
                 )
             else:
@@ -537,8 +635,16 @@ class ManageFavouritesDialog(QDialog):
 
         return items
 
+    def _children(self, parent_item, is_as_shown: bool = False) -> list:
+        children = [parent_item.child(i) for i in range(parent_item.childCount())]
+
+        if is_as_shown or self.sort == FavouritesSort.OWN:
+            return children
+
+        return sorted(children, key=lambda child: child.data(0, ITEM_ORDER))
+
     def _to_open(self, tree_items) -> tuple[list, list[list]]:
-        """What the ones picked open, in the tree's order: here, a folder's
+        """What the ones picked open, in the order shown: here, a folder's
         own videos, as Open All of its menu opens, and a video itself; in a
         new window each, the videos of each folder a folder picked holds.
         One within a folder picked goes with that folder."""
@@ -561,7 +667,7 @@ class ManageFavouritesDialog(QDialog):
 
                 if id(tree_item) in picked and not is_within_picked(tree_item):
                     if is_folder:
-                        items = self._read(tree_item)
+                        items = self._read(tree_item, is_as_shown=True)
                         here.extend(videos_in(items))
                         apart.extend(folders_within(items))
                     else:
@@ -587,6 +693,105 @@ class ManageFavouritesDialog(QDialog):
 
         if here or apart:
             self.open_requested.emit(here, apart)
+
+    # sorted
+
+    def _sort_picked(self, sort: FavouritesSort):
+        Settings().set("favourites/sort", sort)
+        self.sort_by(sort)
+
+    def sort_by(self, sort: FavouritesSort):
+        """Shown sorted so, each folder's own; their own order, taken from
+        the tree while it shows it, put back for OWN."""
+
+        if self.sort == FavouritesSort.OWN:
+            self._number_own_order(self.tree.invisibleRootItem())
+
+        self.sort = sort
+
+        self.tree.setDragDropMode(
+            QAbstractItemView.InternalMove
+            if sort == FavouritesSort.OWN
+            else QAbstractItemView.NoDragDrop
+        )
+
+        self._sort_all(self.tree.invisibleRootItem())
+
+    def _number_own_order(self, parent_item):
+        for index in range(parent_item.childCount()):
+            tree_item = parent_item.child(index)
+            self._is_sorting = True
+            tree_item.setData(0, ITEM_ORDER, self._take_order())
+            self._is_sorting = False
+            self._number_own_order(tree_item)
+
+    def _take_order(self) -> int:
+        self._next_order += 1
+        return self._next_order
+
+    def _sort_all(self, parent_item):
+        self._sort_children(parent_item)
+
+        for index in range(parent_item.childCount()):
+            self._sort_all(parent_item.child(index))
+
+    def _sort_children(self, parent_item):
+        shown = [parent_item.child(i) for i in range(parent_item.childCount())]
+        children = sorted(shown, key=lambda child: child.data(0, ITEM_ORDER))
+
+        if self.sort in {FavouritesSort.NAME, FavouritesSort.NAME_DESC}:
+            children.sort(
+                key=lambda child: natural_key(child.text(0).strip()),
+                reverse=self.sort == FavouritesSort.NAME_DESC,
+            )
+        elif self.sort in {FavouritesSort.ADDED, FavouritesSort.ADDED_DESC}:
+            # one added before favourites kept it as the oldest; one added at
+            # the same time as another kept in their own order, which a
+            # reversed sort keeps too
+            children.sort(
+                key=lambda child: _added_key(_added_of(child)),
+                reverse=self.sort == FavouritesSort.ADDED_DESC,
+            )
+
+        if children == shown:
+            return
+
+        # taken out and put back, they forget being open and picked
+        within = _all_within(parent_item)
+        expanded = [item for item in within if item.isExpanded()]
+        selected = [item for item in within if item.isSelected()]
+        current = self.tree.currentItem()
+
+        self._is_sorting = True
+        parent_item.takeChildren()
+        parent_item.addChildren(children)
+        self._is_sorting = False
+
+        for item in expanded:
+            item.setExpanded(True)
+        if current in within:
+            self.tree.setCurrentItem(current, 0, QItemSelectionModel.NoUpdate)
+        for item in selected:
+            item.setSelected(True)
+
+    def _renamed(self, tree_item, column: int):
+        """One renamed is put where its new name goes, once its editor has
+        closed."""
+
+        if self._is_sorting or column != 0:
+            return
+
+        if self.sort not in {FavouritesSort.NAME, FavouritesSort.NAME_DESC}:
+            return
+
+        QTimer.singleShot(0, lambda: self._resort_around(tree_item))
+
+    def _resort_around(self, tree_item):
+        if tree_item.treeWidget() is not self.tree:
+            return
+
+        self._sort_children(tree_item.parent() or self.tree.invisibleRootItem())
+        self.tree.scrollToItem(tree_item)
 
     # what is done to it
 
@@ -619,9 +824,12 @@ class ManageFavouritesDialog(QDialog):
 
         parent_item = self._new_folder_parent()
 
-        tree_item = self._folder_item(name)
+        tree_item = self._folder_item(name, added_now())
+        tree_item.setData(0, ITEM_ORDER, self._take_order())
         parent_item.addChild(tree_item)
         parent_item.setExpanded(True)
+        if self.sort != FavouritesSort.OWN:
+            self._sort_children(parent_item)
 
         self.tree.setCurrentItem(tree_item)
 

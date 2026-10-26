@@ -346,6 +346,18 @@ class ListUpdate(AutoName):
     CUSTOM = auto()
 
 
+class FavouritesSort(AutoName):
+    """How Manage Favourites shows the favourites, each folder's own sorted
+    so, folders and videos together; their own order, the one they are
+    kept and the menu shows them in, left as it is."""
+
+    OWN = auto()
+    NAME = auto()
+    NAME_DESC = auto()
+    ADDED_DESC = auto()
+    ADDED = auto()
+
+
 class ListSort(AutoName):
     """An order a list was put in by what its items are, kept for a list
     read again from its source each time to be put in it again."""

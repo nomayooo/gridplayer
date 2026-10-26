@@ -30,6 +30,7 @@ from gridplayer.params.static import (
     CacheMode,
     ColorScheme,
     DropAction,
+    FavouritesSort,
     GridMode,
     HWCropBorderOffset,
     ListEndAction,
@@ -236,6 +237,8 @@ _default_settings = {
     "recent_list_playlists": RecentListPlaylists(),
     # the favourite videos and their folders, see models.favourites
     "favourites": Favourites(),
+    # how Manage Favourites shows them, not how they are kept
+    "favourites/sort": FavouritesSort.OWN,
     # the playlist file open when the player was last closed, empty for none
     "last_playlist": "",
 }
