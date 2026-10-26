@@ -20,6 +20,7 @@ from gridplayer.models.favourites import (
     Favourites,
     FavouriteVideo,
     FolderPath,
+    added_now,
     folders_within,
     videos_in,
 )
@@ -428,7 +429,7 @@ def _sub_folder(favourites: Favourites, parent: FolderPath, name: str) -> Folder
         if isinstance(item, FavouriteFolder) and item.name == name:
             return (*parent, index)
 
-    items.append(FavouriteFolder(name=name))
+    items.append(FavouriteFolder(name=name, added=added_now()))
 
     return (*parent, len(items) - 1)
 
@@ -453,4 +454,5 @@ def _favourite_of_video(params: Video, name: str | None = None) -> FavouriteVide
         position=params.current_position,
         loop_index=params.loop_index,
         is_outside_loops=params.is_outside_loops,
+        added=added_now(),
     )

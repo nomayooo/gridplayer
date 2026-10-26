@@ -4,9 +4,11 @@ playlist, and each opened into the grid as a video of its own.
 
 A favourite is a file on disk, with a name of the viewer's, the A-B loops it
 had when it was made a favourite, a loop begun and not finished among them,
-and where in it it was, which it is opened with and at again.
+and where in it it was, which it is opened with and at again; and, a
+favourite or a folder, when it was added, for Manage Favourites to sort by.
 """
 
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -35,17 +37,28 @@ class FavouriteVideo(BaseModel):
     # there (models.video's own)
     loop_index: int = 0
     is_outside_loops: bool = False
+    # when it was added, kept when it is saved again over itself; None for
+    # one added before favourites kept it
+    added: datetime | None = None
 
 
 class FavouriteFolder(BaseModel):
     kind: Literal["folder"] = "folder"
     name: str
     items: list["FavouriteItem"] = Field(default_factory=list)
+    added: datetime | None = None
 
 
 FavouriteItem = Annotated[FavouriteVideo | FavouriteFolder, Field(discriminator="kind")]
 
 FavouriteFolder.model_rebuild()
+
+
+def added_now() -> datetime:
+    """The time a favourite or folder is added at, as the viewer's clock
+    says it."""
+
+    return datetime.now().astimezone()
 
 
 class Favourites(RootModel[list[FavouriteItem]]):
@@ -140,16 +153,30 @@ class Favourites(RootModel[list[FavouriteItem]]):
             else [self.items_at(path) for path, _ in self.folders()]
         )
 
+        def is_same(item) -> bool:
+            return isinstance(item, FavouriteVideo) and (item.path, item.name) == (
+                video.path,
+                video.name,
+            )
+
+        # it keeps when the one it takes the place of was added
+        added = next(
+            (
+                item.added
+                for items in lists
+                for item in items
+                if is_same(item) and item.added is not None
+            ),
+            None,
+        )
+        if added is not None:
+            video = video.model_copy(update={"added": added})
+
         is_replaced = False
 
         for items in lists:
             for index in reversed(range(len(items))):
-                item = items[index]
-
-                if not isinstance(item, FavouriteVideo) or (item.path, item.name) != (
-                    video.path,
-                    video.name,
-                ):
+                if not is_same(items[index]):
                     continue
 
                 if items is target and not is_replaced:
