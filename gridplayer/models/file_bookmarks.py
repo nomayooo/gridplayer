@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ValidationError, field_validator
+from pydantic import BaseModel, Field, RootModel, ValidationError, field_validator
 
 from gridplayer.models.bookmark import Bookmark
 from gridplayer.utils.bookmarks import in_order
@@ -54,3 +54,12 @@ class FileBookmarks(BaseModel):
         """First to last, and only one to a place."""
 
         return in_order(bookmarks)
+
+
+class RememberedBookmarks(RootModel[dict[str, FileBookmarks]]):
+    """The bookmarks of every file the viewer marked, by the file (see
+    utils.bookmarks.file_key), kept with the player's settings rather than
+    with a playlist: found again whenever the file is opened, in a playlist
+    or not, in this window or another, after the player is closed too."""
+
+    root: dict[str, FileBookmarks] = Field(default_factory=dict)

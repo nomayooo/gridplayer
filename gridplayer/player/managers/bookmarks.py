@@ -4,6 +4,12 @@ Shared by every cell playing a file, or kept by each cell for itself, as the
 playlist is set to; the cells read theirs from here and write them back here,
 so that a cell gone on to another file and back, or a file closed and opened
 again, finds them where they were.
+
+Each file's are remembered too, in the player's settings, whatever the
+playlist (models.file_bookmarks.RememberedBookmarks): as the viewer adds,
+renames, colours or removes them, kept as they are then; found again, with
+any the playlist has, whenever the file is opened, in a playlist or not,
+after the player is closed too.
 """
 
 from pathlib import Path
@@ -55,6 +61,11 @@ class BookmarksRegistry(QObject):
     # another playlist's, or none, in place of those there were
     replaced = pyqtSignal()
 
+    # the viewer's own change to the bookmarks of these files (their keys):
+    # one added, renamed, coloured or removed, not a playlist read, a cell
+    # closed or the way they are kept changed
+    edited = pyqtSignal(list)
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -64,6 +75,10 @@ class BookmarksRegistry(QObject):
         # what the cells closed meanwhile were called and coloured, to tell
         # the bookmarks they left one from another
         self._cell_looks: dict[UUID, tuple[str, str]] = {}
+
+        # those a file was given before, in another playlist or none, by its
+        # key: None for none (see BookmarksManager)
+        self.remembered_of = lambda _key: None
 
     @property
     def is_shared(self) -> bool:
@@ -77,6 +92,7 @@ class BookmarksRegistry(QObject):
     def set(self, uri, cell: UUID | None, bookmarks) -> None:
         if self._put(self._key(uri, cell), uri, bookmarks):
             self.changed.emit()
+            self.edited.emit([file_key(uri)])
 
     def add(self, uri, cell: UUID | None, bookmarks) -> None:
         """Bookmarks from elsewhere, added to those the file has here."""
@@ -87,18 +103,44 @@ class BookmarksRegistry(QObject):
         """A file's bookmarks left from when they were shared, for the cell
         that opens it, where each cell keeps its own."""
 
-        if self._is_shared:
+        if not self._is_shared:
+            own = (file_key(uri), cell)
+            left = (file_key(uri), None)
+
+            if own not in self._entries and left in self._entries:
+                self._entries[own] = self._entries.pop(left).model_copy(
+                    update={"cell": cell}
+                )
+                self.changed.emit()
+
+        self._recall(uri, cell)
+
+    def _recall(self, uri, cell: UUID | None) -> None:
+        """Those the file was given before, wherever, with any it has here:
+        where a bookmark is at a place one here is, the one here is kept."""
+
+        remembered = self.remembered_of(file_key(uri))
+
+        if not remembered:
             return
 
-        own = (file_key(uri), cell)
-        left = (file_key(uri), None)
+        if self._put(
+            self._key(uri, cell), uri, merged((self.get(uri, cell), remembered))
+        ):
+            self.changed.emit()
 
-        if own in self._entries or left not in self._entries:
-            return
+    def file_bookmarks(self, key: str) -> list:
+        """All a file has here, its cells' own too, made one."""
 
-        self._entries[own] = self._entries.pop(left).model_copy(update={"cell": cell})
+        return merged(
+            entry.bookmarks for (k, _cell), entry in self._entries.items() if k == key
+        )
 
-        self.changed.emit()
+    def file_uri(self, key: str):
+        return next(
+            (entry.uri for (k, _cell), entry in self._entries.items() if k == key),
+            None,
+        )
 
     def entries(self) -> list[FileBookmarks]:
         return list(self._entries.values())
@@ -149,13 +191,18 @@ class BookmarksRegistry(QObject):
         self.changed.emit()
 
     def remove_entries(self, entries) -> None:
+        entries = list(entries)
+
         for entry in entries:
             self._entries.pop(_key(entry), None)
 
         self.changed.emit()
+        self.edited.emit(sorted({file_key(entry.uri) for entry in entries}))
 
     def put_entries(self, entries) -> None:
         """Entries as they are, in place of those of their file and cell."""
+
+        entries = list(entries)
 
         for entry in entries:
             if entry.bookmarks:
@@ -164,6 +211,7 @@ class BookmarksRegistry(QObject):
                 self._entries.pop(_key(entry), None)
 
         self.changed.emit()
+        self.edited.emit(sorted({file_key(entry.uri) for entry in entries}))
 
     def set_shared(self, is_shared: bool, cells) -> None:
         """Share the bookmarks between the cells, or give each its own.
@@ -305,6 +353,8 @@ class BookmarksManager(ManagerBase):
 
         self._registry = BookmarksRegistry(parent=self)
         self._registry.set_shared(Settings().get("playlist/bookmarks_shared"), ())
+        self._registry.remembered_of = self._remembered_of
+        self._registry.edited.connect(self._remember)
 
         self._ctx.bookmarks = self._registry
 
@@ -320,8 +370,40 @@ class BookmarksManager(ManagerBase):
             "forget_bookmarks_of_cells_gone": self.forget_bookmarks_of_cells_gone,
         }
 
-    def set_bookmarks(self, entries, cells):
+    # remembered by file, whatever the playlist
+
+    def _remembered_of(self, key: str):
+        entry = Settings().get("bookmarks/remembered").root.get(key)
+        return None if entry is None else entry.bookmarks
+
+    def _remember(self, keys: list) -> None:
+        """A file's bookmarks as they are here now kept for it, in place of
+        those it had; with none left, none. Read again first, for another
+        window's to be kept as that one left them."""
+
+        # a copy: none kept yet, it is the setting's default itself
+        remembered = Settings().sync_get("bookmarks/remembered").model_copy(deep=True)
+
+        for key in keys:
+            bookmarks = self._registry.file_bookmarks(key)
+
+            if bookmarks:
+                remembered.root[key] = FileBookmarks(
+                    uri=self._registry.file_uri(key), bookmarks=bookmarks
+                )
+            else:
+                remembered.root.pop(key, None)
+
+        Settings().set("bookmarks/remembered", remembered)
+
+    def set_bookmarks(self, entries, cells, uris=()):
         self._registry.load(entries, cells)
+
+        # each file's remembered ones with them, as its cell will find them:
+        # here, before the playlist is taken as it was opened, they are part
+        # of what it opened, not a change to be asked about on closing it
+        for uri, cell in zip(uris, cells):
+            self._registry.claim(uri, cell)
 
     def clear(self):
         self._registry.clear()

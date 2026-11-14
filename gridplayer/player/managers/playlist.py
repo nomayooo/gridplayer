@@ -41,7 +41,9 @@ class PlaylistManager(ManagerBase):
     grid_state_loaded = pyqtSignal(GridState)
     snapshots_loaded = pyqtSignal(dict)
     # the files' bookmarks, and the ids of the videos about to open
-    bookmarks_loaded = pyqtSignal(list, list)
+    # the playlist's bookmarks, the cells its videos open in, and the files
+    # they play, a cell's to each
+    bookmarks_loaded = pyqtSignal(list, list, list)
     # the lists the cells play from
     lists_loaded = pyqtSignal(list)
     bookmarks_shared_loaded = pyqtSignal(bool)
@@ -389,6 +391,7 @@ class PlaylistManager(ManagerBase):
         self.bookmarks_loaded.emit(
             list(playlist.bookmarks or []),
             [video.id for video in playlist.videos or []],
+            [video.uri for video in playlist.videos or []],
         )
 
         self.grid_state_loaded.emit(playlist.grid_state)

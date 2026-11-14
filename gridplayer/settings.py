@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from PyQt5.QtCore import QSettings
 
 from gridplayer.models.favourites import Favourites
+from gridplayer.models.file_bookmarks import RememberedBookmarks
 from gridplayer.models.keymap_overrides import KeymapOverrides
 from gridplayer.models.recent_list import (
     RecentList,
@@ -235,6 +236,9 @@ _default_settings = {
     "network/allow_http_in_playlists": True,
     "recent_list_videos": RecentListVideos(),
     "recent_list_playlists": RecentListPlaylists(),
+    # every file's bookmarks, found again whenever it is opened; see
+    # models.file_bookmarks.RememberedBookmarks
+    "bookmarks/remembered": RememberedBookmarks(),
     # the favourite videos and their folders, see models.favourites
     "favourites": Favourites(),
     # how the menu and Manage Favourites show them, not how they are kept

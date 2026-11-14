@@ -1649,7 +1649,7 @@ class TestBookmarks:
 
         order = []
         manager.bookmarks_loaded.connect(
-            lambda entries, cells: order.append((entries, cells))
+            lambda entries, cells, uris: order.append((entries, cells, uris))
         )
         manager.videos_loaded.connect(lambda _videos: order.append("videos"))
 
@@ -1659,7 +1659,7 @@ class TestBookmarks:
         manager.load_playlist(playlist)
 
         # with the cells the videos open in, to tell those that do not
-        assert order == [(self.ENTRIES, [video.id]), "videos"]
+        assert order == [(self.ENTRIES, [video.id], [video.uri]), "videos"]
 
     def test_once_saved_those_of_cells_closed_are_forgotten(self, mocker):
         manager, _parent = _make_manager()
