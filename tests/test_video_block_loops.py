@@ -19,9 +19,8 @@ _isolated_settings = chapter_tests._isolated_settings
 
 
 def _make_loop(block, start_ms, end_ms):
-    """As a viewer would: begin one here, go there, finish it."""
+    """As a viewer would: go to its start, begin it, go there, finish it."""
 
-    block.loop.set_start()
     block.seek(start_ms)
     block.loop.set_start()
     block.seek(end_ms)
@@ -65,13 +64,14 @@ class TestMakingThem:
         assert block.video_params.loops == []
         assert block.video_params.loop_start == 8000
 
-    def test_set_loop_start_again_moves_the_start_of_the_one_begun(self, block):
+    def test_set_loop_start_again_begins_another_keeping_the_first(self, block):
         block.seek(5000)
         block.loop.set_start()
         block.seek(9000)
         block.loop.set_start()
 
         assert block.video_params.loop_start == 9000
+        assert block.video_params.earlier_loop_starts == [5000]
 
     def test_the_loop_begun_lets_the_video_go_back_before_it(self, two_loops):
         """So that the next loop can be put anywhere, before the others too."""
@@ -466,3 +466,119 @@ class TestSaving:
 
         assert again.loops == [(20000, 30000), (5000, None)]
         assert again.loop_index == 1
+
+
+class TestSeveralBegun:
+    """A loop begun, then another: both kept, the end finishing the one
+    begun last, the one before it then begun again for its own end."""
+
+    @pytest.fixture
+    def begun_twice(self, block):
+        block.seek(5000)
+        block.loop.set_start()
+        block.seek(2000)
+        block.loop.set_start()
+        return block
+
+    def test_both_kept(self, begun_twice):
+        params = begun_twice.video_params
+
+        assert (params.earlier_loop_starts, params.loop_start) == ([5000], 2000)
+
+    def test_the_end_finishes_the_one_begun_last_the_first_begun_again(
+        self, begun_twice
+    ):
+        begun_twice.seek(4000)
+        begun_twice.loop.set_end()
+
+        params = begun_twice.video_params
+        assert params.loops == [(2000, 4000)]
+        assert (params.loop_start, params.earlier_loop_starts) == (5000, [])
+
+        begun_twice.seek(8000)
+        begun_twice.loop.set_end()
+
+        assert params.loops == [(2000, 4000), (5000, 8000)]
+        assert params.loop_start is None
+        assert params.loop_index == 1
+
+    def test_an_end_before_the_one_begun_last_does_nothing(self, begun_twice):
+        begun_twice.seek(1000)
+        begun_twice.loop.set_end()
+
+        params = begun_twice.video_params
+        assert params.loops == []
+        assert (params.earlier_loop_starts, params.loop_start) == ([5000], 2000)
+
+    def test_one_key_begins_another_before_the_last_and_finishes_past_it(self, block):
+        params = block.video_params
+
+        block.seek(5000)
+        block.loop.set_start_or_end()
+        block.seek(2000)
+        block.loop.set_start_or_end()
+        assert (params.earlier_loop_starts, params.loop_start) == ([5000], 2000)
+
+        block.seek(4000)
+        block.loop.set_start_or_end()
+        assert params.loops == [(2000, 4000)]
+        assert params.loop_start == 5000
+
+        block.seek(8000)
+        block.loop.set_start_or_end()
+        assert params.loops == [(2000, 4000), (5000, 8000)]
+        assert params.loop_start is None
+
+    def test_the_same_place_again_is_not_two(self, block):
+        block.seek(5000)
+        block.loop.set_start()
+        block.loop.set_start()
+
+        assert block.video_params.earlier_loop_starts == []
+
+    def test_undo_takes_back_the_last_the_one_before_begun_again(self, begun_twice):
+        params = begun_twice.video_params
+
+        begun_twice.loop.undo_marker()
+        assert (params.earlier_loop_starts, params.loop_start) == ([], 5000)
+
+        begun_twice.loop.undo_marker()
+        assert params.loop_start is None
+
+    def test_remove_last_too(self, begun_twice):
+        begun_twice.loop.remove_last()
+
+        assert begun_twice.video_params.loop_start == 5000
+
+    def test_reset_takes_them_all(self, begun_twice):
+        begun_twice.loop.reset()
+
+        params = begun_twice.video_params
+        assert (params.earlier_loop_starts, params.loop_start) == ([], None)
+
+    def test_the_bar_marks_the_waiting_start(self, begun_twice):
+        bar = begun_twice.overlay.progress_bar
+
+        assert bar.loop_start == 2000 / LENGTH
+        assert bar.other_loops == ((5000 / LENGTH, 1.0),)
+
+    def test_next_and_previous_go_round_every_start(self, begun_twice):
+        begun_twice.seek(3000)
+
+        begun_twice.loop.next()
+        assert begun_twice.time == 5000
+
+        begun_twice.loop.next()
+        assert begun_twice.time == 2000
+
+    def test_saved_and_read_back(self, begun_twice):
+        video = begun_twice.video_params
+
+        again = Video.model_validate(video.model_dump(mode="json"))
+
+        assert (again.earlier_loop_starts, again.loop_start) == ([5000], 2000)
+
+    def test_ones_waiting_without_one_begun_last_read_as_begun(self):
+        video = Video(uri="http://example.com/a.mp4", earlier_loop_starts=[1, 2])
+
+        assert (video.earlier_loop_starts, video.loop_start) == ([1], 2)

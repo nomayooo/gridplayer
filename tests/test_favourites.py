@@ -30,7 +30,7 @@ from gridplayer.models.favourites import (
 )
 from gridplayer.params.static import FavouritesSort
 from gridplayer.player.managers import favourites as manager_module
-from gridplayer.player.managers.add_videos import AddVideosManager
+from gridplayer.player.managers.add_videos import AddVideosManager, favourite_as_video
 from gridplayer.player.managers.favourites import FavouritesManager
 from gridplayer.settings import _default_settings
 
@@ -567,6 +567,7 @@ def _block(
     position=0,
     loop_index=0,
     is_outside_loops=False,
+    earlier_loop_starts=(),
 ):
     return SimpleNamespace(
         is_local_file=isinstance(uri, Path),
@@ -575,6 +576,7 @@ def _block(
             uri=uri,
             loops=list(loops),
             loop_start=loop_start,
+            earlier_loop_starts=list(earlier_loop_starts),
             current_position=position,
             loop_index=loop_index,
             is_outside_loops=is_outside_loops,
@@ -597,6 +599,27 @@ class TestMakingOne:
         assert added == FavouriteVideo(
             name="My clip", path=NEW, loops=[(500, 900)], position=0
         )
+
+    def test_several_begun_kept_too(self, stored, monkeypatch):
+        asked = Mock(return_value=(stored["favourites"], (), "Begun"))
+        monkeypatch.setattr(manager_module.AddFavouriteDialog, "ask", asked)
+        block = _block(loop_start=2_000, earlier_loop_starts=[5_000, 9_000])
+
+        _manager(active=block).cmd_add_to_favourites()
+
+        added = stored["favourites"].root[-1]
+        assert (added.earlier_loop_starts, added.loop_start) == ([5_000, 9_000], 2_000)
+        video = favourite_as_video(added)
+        assert (video.earlier_loop_starts, video.loop_start) == ([5_000, 9_000], 2_000)
+
+    def test_several_begun_shown_in_the_manage_window(self):
+        video = _video("Begun", loop_start=2_000).model_copy(
+            update={"earlier_loop_starts": [5_000]}
+        )
+
+        dialog = ManageFavouritesDialog(Favourites([video]))
+
+        assert _tree_item(dialog, 0).text(1) == "start at 0:05.000, start at 0:02.000"
 
     def test_a_loop_begun_and_not_finished_kept_too(self, stored, monkeypatch):
         asked = Mock(return_value=(stored["favourites"], (), "Begun"))

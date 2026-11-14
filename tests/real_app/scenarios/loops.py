@@ -20,8 +20,7 @@ def scenario(d):
     first = a.video_params.loops[0]
     d.check("one loop made", len(a.video_params.loops) == 1, a.video_params.loops)
 
-    # the second, later in the file: begun anywhere, moved to 12s, ended at 14s
-    d.act(a, "Set Loop Start")
+    # the second, later in the file: 12s to 14s
     _at(d, a, 12_000, "at 12s, past the first loop")
     d.act(a, "Set Loop Start")
     _at(d, a, 14_000, "at 14s")

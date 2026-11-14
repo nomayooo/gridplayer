@@ -1199,6 +1199,7 @@ def favourite_as_video(favourite) -> Video | None:
         favourite.path,
         loops=list(favourite.loops),
         loop_start=favourite.loop_start,
+        earlier_loop_starts=list(favourite.earlier_loop_starts),
         current_position=(
             favourite.loop_start if favourite.position is None else favourite.position
         ),
