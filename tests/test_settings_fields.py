@@ -43,6 +43,7 @@ INTERNAL_SETTINGS = {
     "recent_list_videos",
     "recent_list_playlists",
     "favourites",
+    "favourites/sort",
 }
 
 SHARED_PAGES = pytest.mark.parametrize(

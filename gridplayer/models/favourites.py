@@ -4,13 +4,20 @@ playlist, and each opened into the grid as a video of its own.
 
 A favourite is a file on disk, with a name of the viewer's, the A-B loops it
 had when it was made a favourite, a loop begun and not finished among them,
-and where in it it was, which it is opened with and at again.
+and where in it it was, which it is opened with and at again; and, a
+favourite or a folder, when it was added, for Manage Favourites to sort by.
 """
 
+from collections.abc import Callable
+from datetime import datetime
+from math import inf
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, TypeVar
 
 from pydantic import BaseModel, Field, RootModel
+
+from gridplayer.params.static import FavouritesSort
+from gridplayer.utils.next_file import natural_key
 
 # an A-B loop as a video keeps it (models.video.LoopSpan, not imported: the
 # settings are made of these, and the video model is made of the settings)
@@ -35,17 +42,28 @@ class FavouriteVideo(BaseModel):
     # there (models.video's own)
     loop_index: int = 0
     is_outside_loops: bool = False
+    # when it was added, kept when it is saved again over itself; None for
+    # one added before favourites kept it
+    added: datetime | None = None
 
 
 class FavouriteFolder(BaseModel):
     kind: Literal["folder"] = "folder"
     name: str
     items: list["FavouriteItem"] = Field(default_factory=list)
+    added: datetime | None = None
 
 
 FavouriteItem = Annotated[FavouriteVideo | FavouriteFolder, Field(discriminator="kind")]
 
 FavouriteFolder.model_rebuild()
+
+
+def added_now() -> datetime:
+    """The time a favourite or folder is added at, as the viewer's clock
+    says it."""
+
+    return datetime.now().astimezone()
 
 
 class Favourites(RootModel[list[FavouriteItem]]):
@@ -140,16 +158,30 @@ class Favourites(RootModel[list[FavouriteItem]]):
             else [self.items_at(path) for path, _ in self.folders()]
         )
 
+        def is_same(item) -> bool:
+            return isinstance(item, FavouriteVideo) and (item.path, item.name) == (
+                video.path,
+                video.name,
+            )
+
+        # it keeps when the one it takes the place of was added
+        added = next(
+            (
+                item.added
+                for items in lists
+                for item in items
+                if is_same(item) and item.added is not None
+            ),
+            None,
+        )
+        if added is not None:
+            video = video.model_copy(update={"added": added})
+
         is_replaced = False
 
         for items in lists:
             for index in reversed(range(len(items))):
-                item = items[index]
-
-                if not isinstance(item, FavouriteVideo) or (item.path, item.name) != (
-                    video.path,
-                    video.name,
-                ):
+                if not is_same(items[index]):
                     continue
 
                 if items is target and not is_replaced:
@@ -203,3 +235,77 @@ def folders_within(items: list[FavouriteItem]) -> list[list[FavouriteVideo]]:
         found.extend(folders_within(item.items))
 
     return found
+
+
+T = TypeVar("T")
+
+
+def sorted_by(
+    entries: list[T],
+    sort: FavouritesSort,
+    name_of: Callable[[T], str],
+    added_of: Callable[[T], datetime | None],
+) -> list[T]:
+    """A folder's, given in their own order, sorted so, folders and videos
+    together: by name as a person would, or by when added, one added before
+    favourites kept it as the oldest and those added at the same time in
+    their own order, which a reversed sort keeps too."""
+
+    entries = list(entries)
+
+    if sort in {FavouritesSort.NAME, FavouritesSort.NAME_DESC}:
+        entries.sort(
+            key=lambda entry: natural_key(name_of(entry).strip()),
+            reverse=sort == FavouritesSort.NAME_DESC,
+        )
+    elif sort in {FavouritesSort.ADDED, FavouritesSort.ADDED_DESC}:
+        entries.sort(
+            key=lambda entry: _added_key(added_of(entry)),
+            reverse=sort == FavouritesSort.ADDED_DESC,
+        )
+
+    return entries
+
+
+def _added_key(added: datetime | None) -> float:
+    return -inf if added is None else added.timestamp()
+
+
+def in_sort(
+    items: list[FavouriteItem], sort: FavouritesSort
+) -> list[tuple[int, FavouriteItem]]:
+    """A folder's items as shown, each with where it is kept."""
+
+    return sorted_by(
+        list(enumerate(items)),
+        sort,
+        name_of=lambda entry: entry[1].name,
+        added_of=lambda entry: latest_added(entry[1]),
+    )
+
+
+def latest_added(item: FavouriteItem) -> datetime | None:
+    """When a favourite was added; for a folder, the latest of when it was
+    and when anything within it was, at any depth, for one a video was just
+    added to to go up with the videos just added. None for none known."""
+
+    if isinstance(item, FavouriteVideo):
+        return item.added
+
+    return newest([item.added, *(latest_added(i) for i in item.items)])
+
+
+def newest(dates) -> datetime | None:
+    known = [date for date in dates if date is not None]
+    return max(known) if known else None
+
+
+def sorted_deep(items: list[FavouriteItem], sort: FavouritesSort) -> list:
+    """A folder's items as shown, and those of each folder within too."""
+
+    return [
+        item.model_copy(update={"items": sorted_deep(item.items, sort)})
+        if isinstance(item, FavouriteFolder)
+        else item
+        for _, item in in_sort(items, sort)
+    ]

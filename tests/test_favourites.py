@@ -6,12 +6,13 @@ the grid with their A-B loops.
 The real-app scenario favourites drives them in the player itself.
 """
 
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
 
 import pytest
-from PyQt5.QtWidgets import QMessageBox, QWidget
+from PyQt5.QtWidgets import QApplication, QMessageBox, QWidget
 
 from gridplayer.dialogs import favourites as dialogs
 from gridplayer.dialogs.favourites import (
@@ -24,16 +25,38 @@ from gridplayer.models.favourites import (
     FavouriteFolder,
     Favourites,
     FavouriteVideo,
+    latest_added,
     videos_in,
 )
+from gridplayer.params.static import FavouritesSort
 from gridplayer.player.managers import favourites as manager_module
 from gridplayer.player.managers.add_videos import AddVideosManager
 from gridplayer.player.managers.favourites import FavouritesManager
+from gridplayer.settings import _default_settings
 
 HERE = Path(__file__).resolve()
 # a file none of the favourites are of
 NEW = HERE.parent / "conftest.py"
 GONE = HERE.parent / "no such video.mp4"
+
+
+@pytest.fixture(autouse=True)
+def undated(monkeypatch):
+    """Those made here added at no time, as before favourites kept it, for
+    them to be compared with those made in the tests; and the sort Manage
+    Favourites is shown in kept apart from the settings the user has."""
+
+    for module in (manager_module, dialogs):
+        monkeypatch.setattr(module, "added_now", lambda: None)
+
+    values = {"favourites/sort": FavouritesSort.OWN}
+    monkeypatch.setattr(
+        dialogs,
+        "Settings",
+        lambda: SimpleNamespace(get=values.get, set=values.__setitem__),
+    )
+
+    return values
 
 
 def _video(name="Clip", path=HERE, loops=(), loop_start=None, position=None):
@@ -193,7 +216,7 @@ class TestTheModel:
 def stored(monkeypatch):
     """The settings the favourites are kept in, a dict of their own."""
 
-    values = {"favourites": _favourites()}
+    values = {"favourites": _favourites(), "favourites/sort": FavouritesSort.OWN}
 
     monkeypatch.setattr(
         manager_module,
@@ -260,6 +283,61 @@ class TestTheMenu:
 
     def test_a_folder_gone_since_is_empty(self, stored):
         assert _manager().menu_generator_favourites_folder((7,)) == []
+
+    def test_in_the_sort_picked_each_folder_its_own(self, stored):
+        stored["favourites"] = _sortable()
+        stored["favourites/sort"] = FavouritesSort.NAME
+
+        menu = _manager().menu_generator_favourites()
+
+        assert [item["title"] for item in menu] == ["Apple", "b", "c", "Zed"]
+        # a folder still known by where it is kept
+        assert menu[3]["menu_generator"] == ("menu_generator_favourites_folder", (1,))
+        folder = _manager().menu_generator_favourites_folder((1,))
+        assert [i if i == "---" else i["title"] for i in folder][:2] == [
+            "First",
+            "Second",
+        ]
+
+    def test_newest_first_one_undated_last(self, stored):
+        stored["favourites"] = _sortable()
+        stored["favourites/sort"] = FavouritesSort.ADDED_DESC
+
+        menu = _manager().menu_generator_favourites()
+
+        assert [item["title"] for item in menu] == ["Zed", "Apple", "b", "c"]
+
+    def test_open_all_opens_them_in_the_order_shown(self, stored, tmp_path):
+        files = [tmp_path / f"{name}.mp4" for name in ("old", "new", "deep")]
+        for file in files:
+            file.write_bytes(b"video")
+        old, new, deep = (
+            FavouriteVideo(name=f.stem, path=f, added=_at(day))
+            for f, day in zip(files, (1, 9, 5), strict=True)
+        )
+        stored["favourites"] = Favourites(
+            [
+                FavouriteFolder(
+                    name="F",
+                    items=[
+                        old,
+                        new,
+                        FavouriteFolder(name="Sub", items=[deep]),
+                    ],
+                )
+            ]
+        )
+        stored["favourites/sort"] = FavouritesSort.ADDED_DESC
+        manager = _manager()
+
+        manager.cmd_open_favourites_folder((0,))
+
+        ((here,), _) = manager._ctx.commands.add_favourite_videos.call_args
+        assert [v.name for v in here] == ["new", "old"]
+
+
+def test_newest_first_unless_another_sort_is_picked():
+    assert _default_settings["favourites/sort"] == FavouritesSort.ADDED_DESC
 
 
 class TestOpening:
@@ -1599,3 +1677,363 @@ class TestTheManageWindow:
         _tree_item(dialog, 1).setSelected(True)
         assert not dialog.rename_button.isEnabled()
         assert dialog.remove_button.isEnabled()
+
+
+def _at(day: int) -> datetime:
+    return datetime(2026, 10, day, 12, tzinfo=timezone.utc)
+
+
+class TestWhenAdded:
+    def test_kept_and_read_back(self):
+        favourites = Favourites(
+            [
+                _video("Dated").model_copy(update={"added": _at(3)}),
+                FavouriteFolder(name="Folder", added=_at(4)),
+            ]
+        )
+
+        again = Favourites.model_validate_json(favourites.model_dump_json())
+
+        assert again == favourites
+        assert again.root[0].added == _at(3)
+
+    def test_none_for_one_kept_before_it_was(self):
+        old = '[{"kind": "video", "name": "Old", "path": "x.mp4"}]'
+
+        assert Favourites.model_validate_json(old).root[0].added is None
+
+    def test_saved_again_over_itself_keeps_when_it_was_first(self):
+        favourites = Favourites(
+            [_video("Same").model_copy(update={"added": _at(3)}), _video("Other")]
+        )
+
+        favourites.put_video(
+            (), _video("Same", position=5_000).model_copy(update={"added": _at(9)})
+        )
+
+        same = favourites.root[0]
+        assert (same.position, same.added) == (5_000, _at(3))
+
+    def test_saved_over_one_kept_before_it_was_takes_its_own(self):
+        favourites = Favourites([_video("Same")])
+
+        favourites.put_video((), _video("Same").model_copy(update={"added": _at(9)}))
+
+        assert favourites.root[0].added == _at(9)
+
+    def test_a_favourite_made_and_a_folder_made_are_dated(self, stored, monkeypatch):
+        monkeypatch.setattr(manager_module, "added_now", lambda: _at(7))
+        asked = Mock(return_value=(stored["favourites"], (), "Now"))
+        monkeypatch.setattr(manager_module.AddFavouriteDialog, "ask", asked)
+
+        _manager(active=_block()).cmd_add_to_favourites()
+        manager_module._sub_folder(stored["favourites"], (), "Made now")
+
+        assert stored["favourites"].root[-2].added == _at(7)
+        assert stored["favourites"].root[-1].added == _at(7)
+
+    def test_a_folder_made_in_the_add_window_is_dated(self, monkeypatch):
+        monkeypatch.setattr(dialogs, "added_now", lambda: _at(7))
+        _typed(monkeypatch, "Made")
+        dialog = AddFavouriteDialog(_favourites(), name="Clip", loops=0)
+
+        dialog.new_folder()
+
+        assert dialog.favourites.root[-1] == FavouriteFolder(name="Made", added=_at(7))
+
+
+def _sortable():
+    """At the top, in their own order: b (day 5), a folder Zed (day 2) of
+    Second (day 9) and First (day 1), Apple (day 8), one undated, c. By date,
+    Zed goes by Second, the latest within it."""
+
+    def dated(name, day):
+        video = _video(name)
+        return video if day is None else video.model_copy(update={"added": _at(day)})
+
+    return Favourites(
+        [
+            dated("b", 5),
+            FavouriteFolder(
+                name="Zed",
+                added=_at(2),
+                items=[dated("Second", 9), dated("First", 1)],
+            ),
+            dated("Apple", 8),
+            dated("c", None),
+        ]
+    )
+
+
+def _shown(dialog, *path) -> list[str]:
+    item = _tree_item(dialog, *path) if path else dialog.tree.invisibleRootItem()
+    return [item.child(i).text(0) for i in range(item.childCount())]
+
+
+def _sorted(sort, favourites=None):
+    dialog = ManageFavouritesDialog(favourites or _sortable())
+    dialog.sort_box.setCurrentIndex(dialog.sort_box.findData(sort))
+    return dialog
+
+
+class TestSortingTheManageWindow:
+    def test_in_their_own_order_at_first(self):
+        dialog = ManageFavouritesDialog(_sortable())
+
+        assert dialog.sort == FavouritesSort.OWN
+        assert _shown(dialog) == ["b", "Zed", "Apple", "c"]
+
+    def test_by_name_folders_and_videos_together_each_folder_its_own(self):
+        dialog = _sorted(FavouritesSort.NAME)
+
+        assert _shown(dialog) == ["Apple", "b", "c", "Zed"]
+        assert _shown(dialog, 3) == ["First", "Second"]
+
+    def test_by_name_backwards(self):
+        dialog = _sorted(FavouritesSort.NAME_DESC)
+
+        assert _shown(dialog) == ["Zed", "c", "b", "Apple"]
+
+    def test_names_numbered_as_a_person_would(self):
+        favourites = Favourites([_video("A (10)"), _video("A (2)"), _video("A")])
+
+        dialog = _sorted(FavouritesSort.NAME, favourites)
+
+        assert _shown(dialog) == ["A", "A (2)", "A (10)"]
+
+    def test_newest_first_one_undated_as_the_oldest(self):
+        dialog = _sorted(FavouritesSort.ADDED_DESC)
+
+        assert _shown(dialog) == ["Zed", "Apple", "b", "c"]
+        assert _shown(dialog, 0) == ["Second", "First"]
+
+    def test_oldest_first(self):
+        dialog = _sorted(FavouritesSort.ADDED)
+
+        assert _shown(dialog) == ["c", "b", "Apple", "Zed"]
+        assert _shown(dialog, 3) == ["First", "Second"]
+
+    def test_undated_ones_kept_in_their_own_order_either_way(self):
+        favourites = Favourites([_video("One"), _video("Two"), _video("Three")])
+
+        for sort in (FavouritesSort.ADDED, FavouritesSort.ADDED_DESC):
+            assert _shown(_sorted(sort, favourites)) == ["One", "Two", "Three"]
+
+    def test_when_added_shown(self):
+        dialog = ManageFavouritesDialog(_sortable())
+
+        assert _tree_item(dialog, 0).text(dialogs.COLUMN_ADDED) != ""
+        assert _tree_item(dialog, 1).text(dialogs.COLUMN_ADDED) != ""
+        assert _tree_item(dialog, 3).text(dialogs.COLUMN_ADDED) == ""
+
+    def test_kept_in_their_own_order_all_the_same(self):
+        dialog = _sorted(FavouritesSort.NAME)
+
+        assert dialog.favourites() == _sortable()
+
+    def test_back_in_their_own_order(self):
+        dialog = _sorted(FavouritesSort.NAME)
+
+        dialog.sort_box.setCurrentIndex(dialog.sort_box.findData(FavouritesSort.OWN))
+
+        assert _shown(dialog) == ["b", "Zed", "Apple", "c"]
+        assert _shown(dialog, 1) == ["Second", "First"]
+
+    def test_their_own_order_as_dragged_kept_through_a_sort(self):
+        dialog = ManageFavouritesDialog(_sortable())
+        # as a drag moves one: taken out and put in elsewhere
+        root = dialog.tree.invisibleRootItem()
+        root.insertChild(0, root.takeChild(3))
+
+        dialog.sort_box.setCurrentIndex(dialog.sort_box.findData(FavouritesSort.NAME))
+        dialog.sort_box.setCurrentIndex(dialog.sort_box.findData(FavouritesSort.OWN))
+
+        assert _shown(dialog) == ["c", "b", "Zed", "Apple"]
+        assert [i.name for i in dialog.favourites().root] == _shown(dialog)
+
+    def test_dragged_only_in_their_own_order(self):
+        dialog = _sorted(FavouritesSort.NAME)
+        assert dialog.tree.dragDropMode() == dialogs.QAbstractItemView.NoDragDrop
+
+        dialog.sort_box.setCurrentIndex(dialog.sort_box.findData(FavouritesSort.OWN))
+        assert dialog.tree.dragDropMode() == dialogs.QAbstractItemView.InternalMove
+
+    def test_open_folders_and_those_picked_stay_so(self):
+        dialog = ManageFavouritesDialog(_sortable())
+        _tree_item(dialog, 1).setExpanded(False)
+        _tree_item(dialog, 2).setSelected(True)
+
+        dialog.sort_box.setCurrentIndex(dialog.sort_box.findData(FavouritesSort.NAME))
+
+        assert not _tree_item(dialog, 3).isExpanded()
+        assert [i.text(0) for i in dialog.tree.selectedItems()] == ["Apple"]
+
+    def test_the_sort_kept_for_next_time(self, undated):
+        _sorted(FavouritesSort.ADDED_DESC)
+
+        assert undated["favourites/sort"] == FavouritesSort.ADDED_DESC
+
+        dialog = ManageFavouritesDialog(_sortable())
+        assert dialog.sort_box.currentData() == FavouritesSort.ADDED_DESC
+        assert _shown(dialog) == ["Zed", "Apple", "b", "c"]
+
+    def test_a_folder_made_shown_in_its_place_kept_at_the_end(self, monkeypatch):
+        monkeypatch.setattr(dialogs, "added_now", lambda: _at(20))
+        dialog = _sorted(FavouritesSort.NAME)
+        _typed(monkeypatch, "Banana")
+
+        dialog.new_folder()
+
+        assert _shown(dialog) == ["Apple", "b", "Banana", "c", "Zed"]
+        made = dialog.favourites().root[-1]
+        assert made == FavouriteFolder(name="Banana", added=_at(20))
+
+    def test_one_renamed_moves_to_its_new_name(self):
+        dialog = _sorted(FavouritesSort.NAME)
+
+        _tree_item(dialog, 0).setText(0, "zz Apple")
+        QApplication.processEvents()
+
+        assert _shown(dialog) == ["b", "c", "Zed", "zz Apple"]
+        assert [i.name for i in dialog.favourites().root][2] == "zz Apple"
+
+    def test_a_folder_opened_in_the_order_shown(self):
+        dialog = _sorted(FavouritesSort.NAME)
+        opened = []
+        dialog.open_requested.connect(
+            lambda here, _apart: opened.append([v.name for v in here])
+        )
+
+        dialog._open([_tree_item(dialog, 3)])
+
+        assert opened == [["First", "Second"]]
+
+
+class TestAddedAtOnce:
+    """What is added in one go is added at one time, each of it: sorted by
+    it, kept in its own order, as the grid had them."""
+
+    @pytest.fixture
+    def ticking(self, monkeypatch):
+        """A clock a day on each time it is read."""
+
+        days = iter(range(1, 28))
+        monkeypatch.setattr(manager_module, "added_now", lambda: _at(next(days)))
+
+    def test_add_all(self, stored, monkeypatch, ticking):
+        stored["favourites"] = Favourites([FavouriteFolder(name="Grid")])
+        asked = Mock(return_value=(stored["favourites"], (0,)))
+        monkeypatch.setattr(manager_module.AddAllFavouritesDialog, "ask", asked)
+
+        _grid_of(_block(uri=NEW), _block(uri=HERE)).cmd_add_all_to_favourites()
+
+        assert [v.added for v in stored["favourites"].items_at((0,))] == [_at(1)] * 2
+
+    def test_a_session_its_windows_and_their_videos(self, stored, ticking):
+        windows = [
+            [_video("a", path=NEW), _video("b")],
+            [_video("c").model_copy(update={"added": _at(20)})],
+        ]
+
+        _manager().save_session_favourites("Session", windows)
+
+        session = stored["favourites"].root[-1]
+        dates = {session.added} | {
+            item.added for folder in session.items for item in [folder, *folder.items]
+        }
+        assert dates == {_at(1)}
+
+    def test_the_files_of_a_window_sent_for_a_session(self, stored, ticking):
+        manager = _grid_of(_block(title="One"), _block(uri=HERE, title="Two"))
+
+        assert {v.added for v in manager.session_favourites()} == {_at(1)}
+
+    def test_an_import_its_folders_and_videos(
+        self, importing, stored, tmp_path, ticking
+    ):
+        from gridplayer.models.video import Video
+
+        importing.picked = [
+            _playlist(tmp_path / "One.gpls", Video(uri=HERE), Video(uri=NEW)),
+            _playlist(tmp_path / "Two.gpls", Video(uri=HERE)),
+        ]
+
+        importing.manager.cmd_import_playlists()
+
+        root = stored["favourites"].root
+        dates = {item.added for folder in root[1:] for item in [folder, *folder.items]}
+        assert dates == {_at(1)}
+
+
+class TestAFolderByTheLatestWithin:
+    def test_the_latest_of_it_and_all_within_at_any_depth(self):
+        folder = FavouriteFolder(
+            name="F",
+            added=_at(2),
+            items=[
+                _video("a").model_copy(update={"added": _at(4)}),
+                FavouriteFolder(
+                    name="Deep",
+                    items=[_video("b").model_copy(update={"added": _at(7)})],
+                ),
+            ],
+        )
+
+        assert latest_added(folder) == _at(7)
+        assert latest_added(FavouriteFolder(name="E", added=_at(3))) == _at(3)
+        assert latest_added(FavouriteFolder(name="None")) is None
+
+    def test_one_added_to_an_old_folder_brings_it_up_in_the_menu(self, stored):
+        stored["favourites"] = Favourites(
+            [
+                FavouriteFolder(name="Old", added=_at(1)),
+                _video("Recent").model_copy(update={"added": _at(5)}),
+            ]
+        )
+        stored["favourites/sort"] = FavouritesSort.ADDED_DESC
+        stored["favourites"].put_video(
+            (0,), _video("New").model_copy(update={"added": _at(9)})
+        )
+
+        menu = _manager().menu_generator_favourites()
+
+        assert [item["title"] for item in menu] == ["Old", "Recent"]
+
+    def test_and_in_the_manage_window_dated_so(self):
+        favourites = Favourites(
+            [
+                FavouriteFolder(
+                    name="Old",
+                    added=_at(1),
+                    items=[_video("New").model_copy(update={"added": _at(9)})],
+                ),
+                _video("Recent").model_copy(update={"added": _at(5)}),
+            ]
+        )
+
+        dialog = _sorted(FavouritesSort.ADDED_DESC, favourites)
+
+        assert _shown(dialog) == ["Old", "Recent"]
+        assert _tree_item(dialog, 0).text(dialogs.COLUMN_ADDED) == _tree_item(
+            dialog, 0, 0
+        ).text(dialogs.COLUMN_ADDED)
+
+    def test_one_moved_out_puts_it_back_down(self):
+        favourites = Favourites(
+            [
+                FavouriteFolder(
+                    name="Old",
+                    added=_at(1),
+                    items=[_video("New").model_copy(update={"added": _at(9)})],
+                ),
+                _video("Recent").model_copy(update={"added": _at(5)}),
+            ]
+        )
+        dialog = _sorted(FavouritesSort.ADDED_DESC, favourites)
+
+        # as a removal takes it out
+        old = _tree_item(dialog, 0)
+        old.removeChild(old.child(0))
+        QApplication.processEvents()
+
+        assert _shown(dialog) == ["Recent", "Old"]

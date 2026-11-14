@@ -20,11 +20,15 @@ from gridplayer.models.favourites import (
     Favourites,
     FavouriteVideo,
     FolderPath,
+    added_now,
     folders_within,
+    in_sort,
+    sorted_deep,
     videos_in,
 )
 from gridplayer.models.playlist import Playlist
 from gridplayer.models.video import Video
+from gridplayer.params.static import FavouritesSort
 from gridplayer.player.managers.add_videos import favourite_as_video
 from gridplayer.player.managers.base import ManagerBase
 from gridplayer.player.managers.recent_list import elide_str
@@ -94,7 +98,7 @@ class FavouritesManager(ManagerBase):
     def _menu_of(self, folder: FolderPath):
         menu = []
 
-        for index, item in enumerate(self._items_at(folder)):
+        for index, item in in_sort(self._items_at(folder), self._sort):
             title = elide_str(item.name, MENU_NAME_MAX_LENGTH)
 
             if isinstance(item, FavouriteFolder):
@@ -119,6 +123,10 @@ class FavouritesManager(ManagerBase):
 
         return menu
 
+    @property
+    def _sort(self) -> FavouritesSort:
+        return Settings().get("favourites/sort")
+
     def _items_at(self, folder: FolderPath):
         try:
             return self.favourites.items_at(folder)
@@ -134,7 +142,8 @@ class FavouritesManager(ManagerBase):
         """A folder's own videos opened here, and those of each folder it
         holds, at any depth, each in a new window of its own."""
 
-        items = self._items_at(folder)
+        # in the order the menu shows them
+        items = sorted_deep(self._items_at(folder), self._sort)
 
         self.open_favourites(videos_in(items), folders_within(items))
 
@@ -265,8 +274,11 @@ class FavouritesManager(ManagerBase):
 
         favourites, folder = added
 
+        # added at once: the same time each, kept in the grid's order when
+        # sorted by it
+        now = added_now()
         favourites.put_videos(
-            folder, _numbered([_favourite_of(block) for block in files])
+            folder, _numbered([_favourite_of(block, added=now) for block in files])
         )
 
         self._save(favourites)
@@ -294,6 +306,8 @@ class FavouritesManager(ManagerBase):
 
         favourites, into, names = asked
         problems = []
+        # all added at the same time, kept in their order when sorted by it
+        now = added_now()
 
         for path, name in zip(paths, names):
             try:
@@ -321,7 +335,7 @@ class FavouritesManager(ManagerBase):
             # a playlist saved without where its videos were (the default)
             # says 0 for each: none, for each to open as a new one would
             made = [
-                _favourite_of_video(video).model_copy(
+                _favourite_of_video(video, added=now).model_copy(
                     update={"position": video.current_position or None}
                 )
                 for video in videos
@@ -329,7 +343,7 @@ class FavouritesManager(ManagerBase):
 
             # each playlist's folder with all its videos, those in others too
             favourites.put_videos(
-                _sub_folder(favourites, into, name),
+                _sub_folder(favourites, into, name, added=now),
                 _numbered(made),
                 is_folder_only=True,
             )
@@ -361,7 +375,11 @@ class FavouritesManager(ManagerBase):
             self._ctx.commands.layout_order()
         )
 
-        return [_favourite_of(block) for block in blocks if block.is_local_file]
+        now = added_now()
+
+        return [
+            _favourite_of(block, added=now) for block in blocks if block.is_local_file
+        ]
 
     def save_session_favourites(self, name: str, windows: list[list]) -> None:
         """A session saved: a folder of the name at the top, holding each
@@ -369,12 +387,16 @@ class FavouritesManager(ManagerBase):
 
         favourites = self.favourites
 
-        session = _sub_folder(favourites, (), name)
+        # all of it saved at the same time, the windows and their videos kept
+        # in their order when sorted by it
+        now = added_now()
+
+        session = _sub_folder(favourites, (), name, added=now)
 
         for number, videos in enumerate(windows, start=1):
             favourites.put_videos(
-                _sub_folder(favourites, session, str(number)),
-                _numbered(videos),
+                _sub_folder(favourites, session, str(number), added=now),
+                _numbered([v.model_copy(update={"added": now}) for v in videos]),
                 is_folder_only=True,
             )
 
@@ -418,7 +440,9 @@ def _numbered(made: list[FavouriteVideo]) -> list[FavouriteVideo]:
     return numbered
 
 
-def _sub_folder(favourites: Favourites, parent: FolderPath, name: str) -> FolderPath:
+def _sub_folder(
+    favourites: Favourites, parent: FolderPath, name: str, added=None
+) -> FolderPath:
     """The folder of the name in the one given, made at the end of it if
     there is none."""
 
@@ -428,20 +452,22 @@ def _sub_folder(favourites: Favourites, parent: FolderPath, name: str) -> Folder
         if isinstance(item, FavouriteFolder) and item.name == name:
             return (*parent, index)
 
-    items.append(FavouriteFolder(name=name))
+    items.append(FavouriteFolder(name=name, added=added or added_now()))
 
     return (*parent, len(items) - 1)
 
 
-def _favourite_of(block, name: str | None = None) -> FavouriteVideo:
+def _favourite_of(block, name: str | None = None, added=None) -> FavouriteVideo:
     """The video a cell plays, as a favourite: its file, its loops, where
     it is in it, under the name given, else the one the cell shows, else
     the file's."""
 
-    return _favourite_of_video(block.video_params, name or _name_of(block))
+    return _favourite_of_video(block.video_params, name or _name_of(block), added=added)
 
 
-def _favourite_of_video(params: Video, name: str | None = None) -> FavouriteVideo:
+def _favourite_of_video(
+    params: Video, name: str | None = None, added=None
+) -> FavouriteVideo:
     """A video as a playlist keeps it, as a favourite, under the name given,
     else its title, else its file's name."""
 
@@ -453,4 +479,5 @@ def _favourite_of_video(params: Video, name: str | None = None) -> FavouriteVide
         position=params.current_position,
         loop_index=params.loop_index,
         is_outside_loops=params.is_outside_loops,
+        added=added or added_now(),
     )
