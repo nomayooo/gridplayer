@@ -334,15 +334,14 @@ class TestJumping:
 
         assert block.time == 40000
 
-    def test_next_at_the_last_goes_nowhere_and_says_so(self, block):
+    def test_next_past_the_last_goes_round_to_the_first(self, block):
         block.seek(35000)
         block.loop_end_action = MagicMock()
 
         block.bookmarker.next()
 
-        assert block.time == 35000
-        assert _seeks(block) == [35000]
-        assert block.notices == ["No next bookmark"]
+        assert block.time == 10000
+        assert "No next bookmark" not in block.notices
         block.loop_end_action.assert_not_called()
 
     def test_previous_well_past_one_goes_back_to_it(self, block):
@@ -359,13 +358,13 @@ class TestJumping:
 
         assert block.time == 10000
 
-    def test_previous_at_the_first_goes_nowhere_and_says_so(self, block):
+    def test_previous_at_the_first_goes_round_to_the_last(self, block):
         block.seek(10000)
 
         block.bookmarker.previous()
 
-        assert block.time == 10000
-        assert block.notices == ["No previous bookmark"]
+        assert block.time == 30000
+        assert "No previous bookmark" not in block.notices
 
     def test_ones_close_together_are_each_gone_to(self, make_block):
         block = make_block(bookmarks=(Bookmark(time_ms=20000), Bookmark(time_ms=20600)))
@@ -398,7 +397,10 @@ class TestJumping:
         assert synced == [30000]
 
     def test_one_that_goes_nowhere_gives_the_others_nothing_to_follow(self, block):
-        block.seek(35000)
+        # within a loop none of them is in
+        block.seek(45000)
+        block.loop.set_start_time(40000)
+        block.loop.set_end_time(50000)
 
         synced = []
         block.sync_time.connect(synced.append)
@@ -442,16 +444,29 @@ class TestTheLoop:
 
         assert reachable == [False, True, False]
 
-    def test_next_and_previous_pass_them_over(self, looped):
+    def test_next_and_previous_pass_them_over_going_round_within_it(self, looped):
         looped.bookmarker.next()
         assert looped.time == 30000
 
+        # round to the only one within it, not out to those beyond
         looped.bookmarker.next()
         assert looped.time == 30000
-        assert looped.notices[-1] == "No next bookmark"
 
         looped.bookmarker.previous()
-        assert looped.notices[-1] == "No previous bookmark"
+        assert looped.time == 30000
+        assert not any(n.startswith("No ") for n in looped.notices)
+
+    def test_none_within_it_says_so(self, make_block):
+        block = make_block(bookmarks=(Bookmark(time_ms=10000),))
+        block.seek(25000)
+        block.loop.set_start_time(20000)
+        block.loop.set_end_time(40000)
+
+        block.bookmarker.next()
+        block.bookmarker.previous()
+
+        assert block.time == 25000
+        assert block.notices == ["No next bookmark", "No previous bookmark"]
 
     def test_a_jump_to_one_out_of_reach_goes_nowhere(self, looped):
         assert looped.bookmarker.seek(0) is False

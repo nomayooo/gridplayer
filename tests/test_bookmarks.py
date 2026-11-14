@@ -25,9 +25,11 @@ from gridplayer.utils.bookmarks import (
     is_timestamp_bookmarked,
     merged,
     new_in_txt,
+    next_bookmark_cycling,
     next_bookmark_index,
     next_bookmark_round,
     parse_bookmarks_txt,
+    previous_bookmark_cycling,
     previous_bookmark_index,
     with_bookmark,
 )
@@ -630,3 +632,25 @@ class TestAColour:
     def test_it_is_kept_as_rrggbb_or_not_at_all(self, given, kept):
         assert bookmark_color(given) == kept
         assert Bookmark(time_ms=0, color=given).color == kept
+
+
+class TestGoingRound:
+    def test_next_past_the_last_to_the_first(self):
+        assert next_bookmark_cycling(BOOKMARKS, 35000, 0, LENGTH) == 0
+
+    def test_previous_before_the_first_to_the_last(self):
+        last = len(BOOKMARKS) - 1
+        assert previous_bookmark_cycling(BOOKMARKS, 0, 0, LENGTH) == last
+
+    def test_otherwise_as_ever(self):
+        assert next_bookmark_cycling(BOOKMARKS, 15000, 0, LENGTH) == 1
+        assert previous_bookmark_cycling(BOOKMARKS, 35000, 0, LENGTH) == 1
+
+    def test_round_within_the_loop_only(self):
+        assert next_bookmark_cycling(BOOKMARKS, 20000, 0, 30000) == 0
+        assert previous_bookmark_cycling(BOOKMARKS, 25000, 20000, LENGTH) == 1
+
+    def test_none_within_reach_is_none(self):
+        assert next_bookmark_cycling(BOOKMARKS, 0, 40000, LENGTH) is None
+        assert previous_bookmark_cycling(BOOKMARKS, 0, 40000, LENGTH) is None
+        assert next_bookmark_cycling((), 0, 0, LENGTH) is None

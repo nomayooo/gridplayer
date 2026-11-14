@@ -4,7 +4,8 @@ The places the viewer marked to come back to, kept by the playlist with
 the file they are in (see BookmarksRegistry): a cell gone on to another
 file finds them again when it comes back. A jump to one is the viewer's
 own seek, the same as a click on the bar, so one inside a sponsor is
-played rather than skipped. A loop narrows them down to itself, as it
+played rather than skipped. Next and Previous go round them: past the last
+to the first, and before the first to the last. A loop narrows them down to itself, as it
 does the chapters. One past the end of what plays -- marked on another
 cut of a stream -- is kept, but is nowhere to go.
 
@@ -24,9 +25,9 @@ from gridplayer.utils.bookmarks import (
     default_bookmark_name,
     is_bookmarked,
     is_in_stretch,
-    next_bookmark_index,
+    next_bookmark_cycling,
     next_bookmark_round,
-    previous_bookmark_index,
+    previous_bookmark_cycling,
     with_bookmark,
 )
 from gridplayer.utils.qt import translate
@@ -161,7 +162,8 @@ class Bookmarker(VideoBlockPart):
         if not bookmarks:
             return False
 
-        index = next_bookmark_index(
+        # round to the first past the last, as Next Loop goes round
+        index = next_bookmark_cycling(
             bookmarks,
             self._block.arriving_time,
             self._block.loop_start,
@@ -184,7 +186,7 @@ class Bookmarker(VideoBlockPart):
         if not bookmarks:
             return False
 
-        index = previous_bookmark_index(
+        index = previous_bookmark_cycling(
             bookmarks,
             self._block.arriving_time,
             self._block.loop_start,

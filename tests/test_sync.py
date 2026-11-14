@@ -124,7 +124,8 @@ class TestTheMenu:
         )
 
         assert "Sync Others" not in [i[0] for i in playback if isinstance(i, tuple)]
-        assert submenus[submenus.index("Playback") + 1] == "Sync Others"
+        # after it the bookmarks, then syncing the others
+        assert submenus[submenus.index("Playback") + 2] == "Sync Others"
         assert others == (
             "Sync Others",
             "Seek Others (Percent)",
