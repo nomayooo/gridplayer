@@ -161,6 +161,7 @@ class VideoBlock(QWidget):
     color_change = pyqtSignal(str)
     loop_start_change = pyqtSignal(float)
     loop_end_change = pyqtSignal(float)
+    loop_color_change = pyqtSignal(str)
     # the loops other than the one playing, as (start, end) fractions
     loops_change = pyqtSignal(tuple)
     seek_marks_change = pyqtSignal(tuple)
@@ -468,6 +469,7 @@ class VideoBlock(QWidget):
             (self.color_change, overlay.set_color),
             (self.loop_start_change, overlay.set_loop_start),
             (self.loop_end_change, overlay.set_loop_end),
+            (self.loop_color_change, overlay.set_loop_color),
             (self.loops_change, overlay.set_other_loops),
             (self.seek_marks_change, overlay.set_seek_marks),
             (self.is_paused_change, overlay.set_is_paused),

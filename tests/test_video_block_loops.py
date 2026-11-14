@@ -8,6 +8,7 @@ is sent.
 import pytest
 
 from gridplayer.models.video import Video
+from gridplayer.widgets.video_overlay_elements import LOOP_COLORS, loop_color
 from tests import test_video_block_chapters as chapter_tests
 
 LENGTH = chapter_tests.LENGTH
@@ -429,7 +430,8 @@ class TestTheBar:
         bar = two_loops.overlay.progress_bar
 
         assert (bar.loop_start, bar.loop_end) == (5000 / LENGTH, 8000 / LENGTH)
-        assert bar.other_loops == ((20000 / LENGTH, 30000 / LENGTH),)
+        assert bar.other_loops == ((20000 / LENGTH, 30000 / LENGTH, loop_color(0)),)
+        assert bar.loop_color == loop_color(1)
 
     def test_while_one_is_begun_all_the_made_ones_are_apart(self, two_loops):
         two_loops.loop.set_start()
@@ -560,7 +562,9 @@ class TestSeveralBegun:
         bar = begun_twice.overlay.progress_bar
 
         assert bar.loop_start == 2000 / LENGTH
-        assert bar.other_loops == ((5000 / LENGTH, 1.0),)
+        # the colour it will have once the one begun after it is finished
+        assert bar.other_loops == ((5000 / LENGTH, 1.0, loop_color(1)),)
+        assert bar.loop_color == loop_color(0)
 
     def test_next_and_previous_go_round_every_start(self, begun_twice):
         begun_twice.seek(3000)
@@ -582,3 +586,50 @@ class TestSeveralBegun:
         video = Video(uri="http://example.com/a.mp4", earlier_loop_starts=[1, 2])
 
         assert (video.earlier_loop_starts, video.loop_start) == ([1], 2)
+
+
+class TestEachInItsColour:
+    """A loop's start and end in one colour, another's in another, each the
+    same from when it is begun to when it is finished, and after."""
+
+    def _colours(self, block):
+        bar = block.overlay.progress_bar
+        return bar.loop_color, {c for *_, c in bar.other_loops}
+
+    def test_each_made_one_its_own(self, two_loops):
+        playing, others = self._colours(two_loops)
+
+        assert playing == loop_color(1)
+        assert others == {loop_color(0)}
+
+    def test_the_one_begun_the_colour_it_keeps_once_finished(self, block):
+        block.seek(5000)
+        block.loop.set_start()
+        begun = block.overlay.progress_bar.loop_color
+
+        block.seek(8000)
+        block.loop.set_end()
+
+        assert block.overlay.progress_bar.loop_color == begun
+
+    def test_one_waiting_keeps_its_colour_begun_again_and_finished(self, block):
+        block.seek(5000)
+        block.loop.set_start()
+        block.seek(2000)
+        block.loop.set_start()
+        bar = block.overlay.progress_bar
+        (waiting,) = [c for *_, c in bar.other_loops]
+
+        block.seek(4000)
+        block.loop.set_end()
+        assert bar.loop_color == waiting
+
+        block.seek(8000)
+        block.loop.set_end()
+        assert bar.loop_color == waiting
+
+    def test_round_the_colours_past_the_last(self, block):
+        for index in range(len(LOOP_COLORS) + 1):
+            _make_loop(block, 1000 + index * 1000, 1500 + index * 1000)
+
+        assert block.overlay.progress_bar.loop_color == loop_color(0)
