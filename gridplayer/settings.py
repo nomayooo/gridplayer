@@ -146,6 +146,7 @@ _default_settings = {
     "playlist/show_overlay_border": True,
     "playlist/overlay_hide_on_timeout": True,
     "playlist/overlay_timeout": 3,
+    "playlist/show_bookmark_list": True,
     "playlist/bookmark_list_position": BookmarkListPosition.TOP_LEFT,
     "video_defaults/cell_view_mode": VideoCellViewMode.FILL,
     "video_defaults/aspect_ratio": "",

@@ -456,6 +456,10 @@ class VideoBlock(QWidget):
             (overlay.mute_unmute_clicked, self.audio.mute_unmute),
             (overlay.bookmark_clicked, self.bookmarker.jump_to_marker),
             (overlay.bookmark_menu_requested, self.bookmarker.show_marker_menu),
+            (
+                overlay.bookmark_list_toggle_clicked,
+                lambda: self._ctx.commands.toggle_show_bookmark_list(),
+            ),
             (overlay.list_place_clicked, self.navigation.show_list_window),
             (overlay.stop_clicked, self.stop_playback),
             (overlay.retry_clicked, self.reload),

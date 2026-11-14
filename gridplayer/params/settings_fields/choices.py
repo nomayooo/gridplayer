@@ -62,7 +62,6 @@ def bookmark_list_positions() -> dict:
         BookmarkListPosition.TOP_RIGHT: translate("Bookmark List", "Top Right"),
         BookmarkListPosition.BOTTOM_LEFT: translate("Bookmark List", "Bottom Left"),
         BookmarkListPosition.BOTTOM_RIGHT: translate("Bookmark List", "Bottom Right"),
-        BookmarkListPosition.OFF: translate("Bookmark List", "Off"),
     }
 
 

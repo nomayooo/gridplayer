@@ -35,6 +35,7 @@ class SettingsManager(ManagerBase):
     set_show_overlay_border = pyqtSignal(bool)
     set_overlay_hide_on_timeout = pyqtSignal(bool)
     set_overlay_timeout = pyqtSignal(int)
+    set_show_bookmark_list = pyqtSignal(bool)
     set_bookmark_list_position = pyqtSignal(BookmarkListPosition)
     set_subtitle_encoding = pyqtSignal(str)
     set_bookmarks_shared = pyqtSignal(bool)
@@ -86,6 +87,7 @@ class SettingsManager(ManagerBase):
             "playlist/show_overlay_border": self.set_show_overlay_border,
             "playlist/overlay_hide_on_timeout": self.set_overlay_hide_on_timeout,
             "playlist/overlay_timeout": self.set_overlay_timeout,
+            "playlist/show_bookmark_list": self.set_show_bookmark_list,
             "playlist/bookmark_list_position": self.set_bookmark_list_position,
             "video_defaults/subtitle_encoding": self.set_subtitle_encoding,
             "playlist/bookmarks_shared": self.set_bookmarks_shared,

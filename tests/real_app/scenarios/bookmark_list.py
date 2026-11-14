@@ -1,8 +1,9 @@
 """The bookmarks as a short list in a corner of the cell: none there with
 none, up once there are some, each a row to click to go there, the one the
 video last passed picked out, more than it shows a turn of the wheel away,
-moved to another corner or off from the menu, and none in a cell too small
-to spare the room."""
+moved to another corner from the menu, hidden and shown again with Shift+M
+and with its button on the bar, and none in a cell too small to spare the
+room."""
 
 
 def _at(d, a, ms, what):
@@ -111,12 +112,29 @@ def scenario(d):
     d.wait_until(lambda: len(d.cells) == 1, "only a left")
     d.ctx.active_block = a
 
-    d.act(a, "Bookmark List Off")
-    d.pump()
-    d.check("off", not shown.isVisibleTo(a.overlay))
     d.act(a, "Bookmark List Top Left")
+
+    # hidden and shown again with Shift+M, as the viewer presses it, and by
+    # the button on the bar, filled while it is shown
+    button = a.overlay.bookmark_list_button
+    d.check("its button there", button.isVisibleTo(a.overlay) and not button.is_off)
+
+    from PyQt5.QtWidgets import QApplication
+
+    QTest.keyClick(QApplication.focusWidget() or d.player, Qt.Key_M, Qt.ShiftModifier)
     d.pump()
-    d.check("back", shown.isVisibleTo(a.overlay))
+    d.check("hidden with Shift+M", not shown.isVisibleTo(a.overlay))
+    d.check(
+        "the button there still, empty", button.isVisibleTo(a.overlay) and button.is_off
+    )
+    d.shot("hidden", a)
+
+    QTest.mouseClick(button, Qt.LeftButton)
+    d.pump()
+    d.check("shown by the button", shown.isVisibleTo(a.overlay))
+    d.check(
+        "in its corner still", shown.geometry().center().x() < a.overlay.width() / 2
+    )
 
     # a cell too small
     d.player.resize(260, 200)

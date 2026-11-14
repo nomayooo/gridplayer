@@ -83,6 +83,43 @@ def draw_cross(rect, painter, color_fg, color_bg):
     )
 
 
+def _bookmark_path(rect) -> QPainterPath:
+    """A bookmark ribbon, its foot cut into a notch, as tall as play is."""
+
+    width = rect.width() - 12
+    left = rect.x() + (rect.width() - width) / 2
+    top = rect.y() + 4
+    bottom = rect.y() + rect.height() - 4
+    notch = width / 2
+
+    path = QPainterPath()
+    path.moveTo(left, top)
+    path.lineTo(left + width, top)
+    path.lineTo(left + width, bottom)
+    path.lineTo(left + width / 2, bottom - notch)
+    path.lineTo(left, bottom)
+    path.closeSubpath()
+
+    return path
+
+
+def draw_bookmark_on(rect, painter, color_fg, color_bg):
+    """The bookmarks listed: a ribbon, filled."""
+
+    painter.setRenderHint(QPainter.Antialiasing, True)
+    painter.setPen(Qt.NoPen)
+    painter.fillPath(_bookmark_path(rect), QBrush(color_fg))
+
+
+def draw_bookmark_off(rect, painter, color_fg, color_bg):
+    """The bookmarks not listed: the ribbon's outline alone."""
+
+    painter.setRenderHint(QPainter.Antialiasing, True)
+    painter.setBrush(Qt.NoBrush)
+    painter.setPen(QPen(color_fg, 2, Qt.SolidLine, Qt.FlatCap, Qt.MiterJoin))
+    painter.drawPath(_bookmark_path(rect.adjusted(1, 1, -1, -1)))
+
+
 def draw_list(rect, painter, color_fg, color_bg):
     """Three lines, the list's sign."""
 

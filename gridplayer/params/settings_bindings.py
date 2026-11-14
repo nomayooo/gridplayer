@@ -29,6 +29,7 @@ PLAYLIST_ATTRS: MappingProxyType[str, str] = MappingProxyType(
         "playlist/disable_mouse_wheel_events": "disable_mouse_wheel_events",
         "playlist/disable_overlay": "disable_overlay",
         "playlist/show_overlay_border": "show_overlay_border",
+        "playlist/show_bookmark_list": "show_bookmark_list",
         "playlist/bookmark_list_position": "bookmark_list_position",
         "playlist/overlay_hide_on_timeout": "overlay_hide_on_timeout",
         "playlist/overlay_timeout": "overlay_timeout",

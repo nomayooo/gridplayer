@@ -27,6 +27,7 @@ from gridplayer.utils.qt import MILLISECONDS, qt_connect, translate
 from gridplayer.utils.time_txt import get_time_txt
 from gridplayer.widgets.video_overlay_bookmark_list import OverlayBookmarkList
 from gridplayer.widgets.video_overlay_buttons import (
+    OverlayBookmarkListButton,
     OverlayButton,
     OverlayExitButton,
     OverlayListPlaceButton,
@@ -118,6 +119,9 @@ class OverlayBlock(QWidget):
     # a marker's menu asked for: where, and the times of its bookmarks
     bookmark_menu_requested = pyqtSignal(QPoint, tuple)
 
+    # the bookmarks' list shown or hidden, by its button
+    bookmark_list_toggle_clicked = pyqtSignal()
+
     # which item of its list the cell plays clicked, for the List window
     list_place_clicked = pyqtSignal()
 
@@ -142,6 +146,7 @@ class OverlayBlock(QWidget):
         self._last_position = (0, 0)
         self._volume_button_wanted = True
         self._bookmark_list_position = BookmarkListPosition.TOP_LEFT
+        self._is_bookmark_list_shown = True
 
         # what a failed cell offers past trying again; its Next goes back
         # where its list is played back to front
@@ -193,6 +198,7 @@ class OverlayBlock(QWidget):
             (self.bookmark_markers.marker_left, self.floating_progress.on_mouse_left),
             (self.bookmark_markers.marker_clicked, self.bookmark_clicked),
             (self.bookmark_list.bookmark_clicked, self.bookmark_clicked),
+            (self.bookmark_list_button.clicked, self.bookmark_list_toggle_clicked),
             (
                 self.bookmark_markers.marker_menu_requested,
                 self.bookmark_menu_requested,
@@ -303,6 +309,10 @@ class OverlayBlock(QWidget):
         self.progress_bar = OverlayProgressBar(parent=self)
         self.progress_bar_placeholder = QWidget(parent=self)
         self.volume_button = OverlayVolumeButton(parent=self)
+        self.bookmark_list_button = OverlayBookmarkListButton(parent=self)
+        self.bookmark_list_button.setToolTip(
+            translate("Bookmark List", "Show Bookmark List")
+        )
 
         self.play_button = OverlayTextButton(
             text=translate("Overlay", "Play"), sign=draw_play, parent=self
@@ -326,6 +336,7 @@ class OverlayBlock(QWidget):
         self.bottom_bar.addWidget(self.retry_button)
         self.bottom_bar.addWidget(self.details_button)
         self.bottom_bar.addWidget(self.label_progress)
+        self.bottom_bar.addWidget(self.bookmark_list_button)
         self.bottom_bar.addWidget(self.progress_bar, 1)
         self.bottom_bar.addWidget(self.progress_bar_placeholder, 1)
         self.bottom_bar.addWidget(self.next_button)
@@ -674,9 +685,6 @@ class OverlayBlock(QWidget):
         for bar in (self.left_bar, self.right_list_bar):
             bar.removeWidget(bookmark_list)
 
-        if position is BookmarkListPosition.OFF:
-            return
-
         is_left = position in {
             BookmarkListPosition.TOP_LEFT,
             BookmarkListPosition.BOTTOM_LEFT,
@@ -694,20 +702,33 @@ class OverlayBlock(QWidget):
         else:
             bar.addWidget(bookmark_list, 0, alignment)
 
+    def set_bookmark_list_shown(self, is_shown: bool):
+        self._is_bookmark_list_shown = is_shown
+        self._sync_bookmark_list()
+
+    @property
+    def is_bookmark_list_shown(self) -> bool:
+        return self._is_bookmark_list_shown
+
     def _sync_bookmark_list(self):
-        """Up while there are bookmarks to pick from in a video, and room in
-        the cell to spare for them, and wherever it goes but off."""
+        """Its button up while there are bookmarks to pick from in a video,
+        and room in the cell to spare for them; the list too, while it is
+        to be shown."""
 
         bookmark_list = self.bookmark_list
         width, height = self.width(), self.height()
 
-        bookmark_list.setMaximumWidth(bookmark_list.max_width_in(width))
-        bookmark_list.setVisible(
-            self._bookmark_list_position is not BookmarkListPosition.OFF
-            and self._mode is OverlayMode.VIDEO
+        is_offered = (
+            self._mode is OverlayMode.VIDEO
             and bookmark_list.has_rows
             and bookmark_list.has_room(width, height)
         )
+
+        self.bookmark_list_button.setVisible(is_offered)
+        self.bookmark_list_button.is_off = not self._is_bookmark_list_shown
+
+        bookmark_list.setMaximumWidth(bookmark_list.max_width_in(width))
+        bookmark_list.setVisible(is_offered and self._is_bookmark_list_shown)
 
     def _sync_progress_label(self):
         if self._mode is not OverlayMode.VIDEO:

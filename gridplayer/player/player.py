@@ -164,6 +164,10 @@ class Player(QWidget, ManagersManager):
                 ),
                 ("set_overlay_timeout", "video_blocks.set_overlay_timeout"),
                 (
+                    "set_show_bookmark_list",
+                    "video_blocks.set_show_bookmark_list",
+                ),
+                (
                     "set_bookmark_list_position",
                     "video_blocks.set_bookmark_list_position",
                 ),
@@ -222,6 +226,10 @@ class Player(QWidget, ManagersManager):
                 (
                     "overlay_timeout_loaded",
                     "video_blocks.set_overlay_timeout",
+                ),
+                (
+                    "show_bookmark_list_loaded",
+                    "video_blocks.set_show_bookmark_list",
                 ),
                 (
                     "bookmark_list_position_loaded",

@@ -335,6 +335,13 @@ ACTIONS = MappingProxyType(
             "menu_generator": "menu_generator_bookmarks",
             "is_menu_inline": True,
         },
+        "Show Bookmark List": {
+            "title": translate("Bookmark List", "Show Bookmark List"),
+            "icon": "bookmarks",
+            "key": "Shift+M",
+            "func": "toggle_show_bookmark_list",
+            "check_if": "is_show_bookmark_list",
+        },
         "Bookmark List Top Left": {
             "title": translate("Bookmark List", "Top Left"),
             "icon": "empty",
@@ -379,13 +386,6 @@ ACTIONS = MappingProxyType(
                 "is_bookmark_list_position_set_to",
                 BookmarkListPosition.BOTTOM_RIGHT,
             ),
-            "is_choice": True,
-        },
-        "Bookmark List Off": {
-            "title": translate("Bookmark List", "Off"),
-            "icon": "empty",
-            "func": ("set_bookmark_list_position_here", BookmarkListPosition.OFF),
-            "check_if": ("is_bookmark_list_position_set_to", BookmarkListPosition.OFF),
             "is_choice": True,
         },
         "Manage Bookmarks": {

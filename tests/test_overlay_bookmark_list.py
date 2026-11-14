@@ -254,10 +254,65 @@ class TestWhereItGoes:
         )
         assert shown.mapTo(overlay, shown.rect().bottomLeft()).y() < bar_top.y()
 
-    def test_off_none(self, shown, overlay):
-        overlay.set_bookmark_list_position(BookmarkListPosition.OFF)
 
+class TestShownOrNot:
+    def test_shown_to_begin_with(self, shown, overlay):
+        assert overlay.is_bookmark_list_shown
+        assert shown.isVisibleTo(overlay)
+
+    def test_hidden_and_shown_again_where_it_was(self, shown, overlay):
+        overlay.set_bookmark_list_position(BookmarkListPosition.BOTTOM_RIGHT)
+
+        overlay.set_bookmark_list_shown(False)
         assert not shown.isVisibleTo(overlay)
 
-        overlay.set_bookmark_list_position(BookmarkListPosition.TOP_RIGHT)
+        overlay.set_bookmark_list_shown(True)
+        overlay.lay_out_now()
         assert shown.isVisibleTo(overlay)
+        assert overlay.bookmark_list_position is BookmarkListPosition.BOTTOM_RIGHT
+
+
+class TestItsButton:
+    def test_there_with_bookmarks(self, shown, overlay):
+        assert overlay.bookmark_list_button.isVisibleTo(overlay)
+
+    def test_none_without(self, overlay):
+        overlay.set_seek_marks((SeekMark(1000, "A chapter"),))
+
+        assert not overlay.bookmark_list_button.isVisibleTo(overlay)
+
+    def test_there_with_the_list_hidden_to_show_it_again(self, shown, overlay):
+        overlay.set_bookmark_list_shown(False)
+
+        button = overlay.bookmark_list_button
+        assert button.isVisibleTo(overlay)
+        assert button.is_off
+
+        overlay.set_bookmark_list_shown(True)
+        assert not button.is_off
+
+    def test_none_where_the_list_has_no_room(self, shown, overlay):
+        overlay.resize(MIN_CELL_WIDTH - 1, 400)
+
+        assert not overlay.bookmark_list_button.isVisibleTo(overlay)
+
+    def test_none_over_a_cell_with_no_picture(self, shown, overlay):
+        overlay.set_mode(OverlayMode.LOADING)
+
+        assert not overlay.bookmark_list_button.isVisibleTo(overlay)
+
+    def test_clicked_asks_for_it_shown_or_not(self, shown, overlay):
+        asked = []
+        overlay.bookmark_list_toggle_clicked.connect(lambda: asked.append(True))
+
+        QTest.mouseClick(overlay.bookmark_list_button, Qt.LeftButton)
+
+        assert asked == [True]
+
+    def test_in_the_bar_after_the_time(self, shown, overlay):
+        bar = overlay.bottom_bar
+        widgets = [bar.itemAt(i).widget() for i in range(bar.count())]
+
+        assert widgets.index(overlay.bookmark_list_button) == (
+            widgets.index(overlay.label_progress) + 1
+        )

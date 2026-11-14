@@ -233,6 +233,7 @@ class VideoBlocksManager(ManagerBase):
             "playlist/overlay_hide_on_timeout"
         )
         self._ctx.overlay_timeout = Settings().get("playlist/overlay_timeout")
+        self._ctx.is_show_bookmark_list = Settings().get("playlist/show_bookmark_list")
         self._ctx.bookmark_list_position = Settings().get(
             "playlist/bookmark_list_position"
         )
@@ -306,6 +307,8 @@ class VideoBlocksManager(ManagerBase):
                 lambda position: self._ctx.bookmark_list_position == position
             ),
             "set_bookmark_list_position_here": self.set_bookmark_list_position_here,
+            "is_show_bookmark_list": lambda: self._ctx.is_show_bookmark_list,
+            "toggle_show_bookmark_list": self.toggle_show_bookmark_list,
             "set_show_overlay_border": self.set_show_overlay_border,
             "toggle_show_overlay_border": self.toggle_show_overlay_border,
             "is_overlay_hide_on_timeout": lambda: self._ctx.is_overlay_hide_on_timeout,
@@ -465,6 +468,19 @@ class VideoBlocksManager(ManagerBase):
         self._ctx.bookmark_list_position = position
         for vb in self._ctx.video_blocks:
             vb.overlay.set_bookmark_list_position(position)
+
+    def set_show_bookmark_list(self, is_shown):
+        self._ctx.is_show_bookmark_list = is_shown
+        for vb in self._ctx.video_blocks:
+            vb.overlay.set_bookmark_list_shown(is_shown)
+
+    def toggle_show_bookmark_list(self):
+        """Shown or not, every video's; the playlist's own, as the others
+        there."""
+
+        value = not self._ctx.is_show_bookmark_list
+        PlaylistSettings().set("playlist/show_bookmark_list", value)
+        self.set_show_bookmark_list(value)
 
     def set_bookmark_list_position_here(self, position):
         """Picked from the menu: the playlist's own, as the others there."""
@@ -865,6 +881,7 @@ class VideoBlocksManager(ManagerBase):
 
         vb.setAttribute(Qt.WA_DeleteOnClose)
         vb.overlay.set_bookmark_list_position(self._ctx.bookmark_list_position)
+        vb.overlay.set_bookmark_list_shown(self._ctx.is_show_bookmark_list)
 
         qt_connect(
             (vb.about_to_close, self.close_single),

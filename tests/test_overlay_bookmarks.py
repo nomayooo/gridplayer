@@ -202,10 +202,12 @@ class TestTheBar:
     def test_it_is_left_to_the_chapters_and_segments(self, overlay):
         bar = overlay.progress_bar
 
-        overlay.set_seek_marks((*CHAPTERS, SPONSOR))
+        # given the bar alone, as wide either way: with a bookmark, the
+        # overlay puts its list's button beside it
+        bar.marks = (*CHAPTERS, SPONSOR)
         without = bar.grab().toImage()
 
-        overlay.set_seek_marks((*CHAPTERS, SPONSOR, GOAL))
+        bar.marks = (*CHAPTERS, SPONSOR, GOAL)
         with_it = bar.grab().toImage()
 
         assert with_it == without

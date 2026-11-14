@@ -398,13 +398,12 @@ class HWCropBorderOffset(AutoName):
 
 
 class BookmarkListPosition(AutoName):
-    """Where on a cell its bookmarks are listed, to pick one from; or not."""
+    """Where on a cell its bookmarks are listed, to pick one from."""
 
     TOP_LEFT = auto()
     TOP_RIGHT = auto()
     BOTTOM_LEFT = auto()
     BOTTOM_RIGHT = auto()
-    OFF = auto()
 
 
 class SeekSyncMode(AutoName):
