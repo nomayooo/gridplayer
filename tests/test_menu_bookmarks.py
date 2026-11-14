@@ -50,6 +50,15 @@ class TestWhereTheyAre:
             "Previous Bookmark",
             "Next Bookmark",
             "Manage Bookmarks",
+            (
+                "Bookmark List Position",
+                "Bookmark List Top Left",
+                "Bookmark List Top Right",
+                "Bookmark List Bottom Left",
+                "Bookmark List Bottom Right",
+                "---",
+                "Bookmark List Off",
+            ),
             "---",
             "Bookmark List",
         ]

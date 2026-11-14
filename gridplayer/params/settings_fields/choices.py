@@ -15,6 +15,7 @@ from gridplayer.params.static import (
     AddMode,
     AudioChannelMode,
     AudioTrackMode,
+    BookmarkListPosition,
     CacheMode,
     ColorScheme,
     DropAction,
@@ -52,6 +53,16 @@ def grid_modes() -> dict:
         GridMode.AUTO_ROWS: translate("Grid Mode", "Auto (Rows First)"),
         GridMode.AUTO_COLS: translate("Grid Mode", "Auto (Columns First)"),
         GridMode.FIXED: translate("Grid Mode", "Fixed Grid"),
+    }
+
+
+def bookmark_list_positions() -> dict:
+    return {
+        BookmarkListPosition.TOP_LEFT: translate("Bookmark List", "Top Left"),
+        BookmarkListPosition.TOP_RIGHT: translate("Bookmark List", "Top Right"),
+        BookmarkListPosition.BOTTOM_LEFT: translate("Bookmark List", "Bottom Left"),
+        BookmarkListPosition.BOTTOM_RIGHT: translate("Bookmark List", "Bottom Right"),
+        BookmarkListPosition.OFF: translate("Bookmark List", "Off"),
     }
 
 

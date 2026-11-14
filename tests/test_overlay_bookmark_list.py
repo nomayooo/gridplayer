@@ -9,6 +9,7 @@ from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication
 
 from gridplayer.models.seek_mark import SeekMark, SeekMarkKind
+from gridplayer.params.static import BookmarkListPosition
 from gridplayer.widgets.video_overlay import OverlayBlock, OverlayMode
 from gridplayer.widgets.video_overlay_bookmark_list import (
     MAX_ROWS,
@@ -210,3 +211,53 @@ class TestKeptOutOfTheWay:
 
     def test_smaller_than_the_rest_of_the_overlay(self, shown, overlay):
         assert shown.font().pointSizeF() < overlay.label_text.font().pointSizeF()
+
+
+class TestWhereItGoes:
+    def test_top_left_to_begin_with(self, shown, overlay):
+        assert overlay.bookmark_list_position is BookmarkListPosition.TOP_LEFT
+        assert shown.x() < overlay.width() / 2
+        assert shown.y() < overlay.height() / 2
+
+    @pytest.mark.parametrize(
+        ("position", "is_left", "is_top"),
+        [
+            (BookmarkListPosition.TOP_LEFT, True, True),
+            (BookmarkListPosition.TOP_RIGHT, False, True),
+            (BookmarkListPosition.BOTTOM_LEFT, True, False),
+            (BookmarkListPosition.BOTTOM_RIGHT, False, False),
+        ],
+    )
+    def test_in_the_corner_picked(self, shown, overlay, position, is_left, is_top):
+        overlay.set_bookmark_list_position(position)
+        overlay.lay_out_now()
+
+        middle = shown.geometry().center()
+        assert (middle.x() < overlay.width() / 2) == is_left
+        assert (middle.y() < overlay.height() / 2) == is_top
+        assert shown.isVisibleTo(overlay)
+
+    def test_on_the_right_clear_of_the_volumes_bar(self, shown, overlay):
+        overlay.set_bookmark_list_position(BookmarkListPosition.TOP_RIGHT)
+        overlay.lay_out_now()
+
+        volume = overlay.volume_bar
+        if volume.isVisibleTo(overlay):
+            assert not shown.geometry().intersects(volume.geometry())
+
+    def test_above_the_bar_at_the_bottom(self, shown, overlay):
+        overlay.set_bookmark_list_position(BookmarkListPosition.BOTTOM_LEFT)
+        overlay.lay_out_now()
+
+        bar_top = overlay.progress_bar.mapTo(
+            overlay, overlay.progress_bar.rect().topLeft()
+        )
+        assert shown.mapTo(overlay, shown.rect().bottomLeft()).y() < bar_top.y()
+
+    def test_off_none(self, shown, overlay):
+        overlay.set_bookmark_list_position(BookmarkListPosition.OFF)
+
+        assert not shown.isVisibleTo(overlay)
+
+        overlay.set_bookmark_list_position(BookmarkListPosition.TOP_RIGHT)
+        assert shown.isVisibleTo(overlay)

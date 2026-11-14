@@ -164,6 +164,10 @@ class Player(QWidget, ManagersManager):
                 ),
                 ("set_overlay_timeout", "video_blocks.set_overlay_timeout"),
                 (
+                    "set_bookmark_list_position",
+                    "video_blocks.set_bookmark_list_position",
+                ),
+                (
                     "set_subtitle_encoding",
                     "video_blocks.apply_subtitle_encoding",
                 ),
@@ -218,6 +222,10 @@ class Player(QWidget, ManagersManager):
                 (
                     "overlay_timeout_loaded",
                     "video_blocks.set_overlay_timeout",
+                ),
+                (
+                    "bookmark_list_position_loaded",
+                    "video_blocks.set_bookmark_list_position",
                 ),
                 (
                     "subtitle_encoding_loaded",

@@ -397,6 +397,16 @@ class HWCropBorderOffset(AutoName):
     PX12 = auto()
 
 
+class BookmarkListPosition(AutoName):
+    """Where on a cell its bookmarks are listed, to pick one from; or not."""
+
+    TOP_LEFT = auto()
+    TOP_RIGHT = auto()
+    BOTTOM_LEFT = auto()
+    BOTTOM_RIGHT = auto()
+    OFF = auto()
+
+
 class SeekSyncMode(AutoName):
     DISABLED = auto()
     PERCENT = auto()

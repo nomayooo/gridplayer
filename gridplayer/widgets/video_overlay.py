@@ -20,7 +20,7 @@ from PyQt5.QtWidgets import (
 )
 
 from gridplayer.params import env
-from gridplayer.params.static import OVERLAY_ACTIVITY_EVENT
+from gridplayer.params.static import OVERLAY_ACTIVITY_EVENT, BookmarkListPosition
 from gridplayer.utils.compositor_linux import should_make_overlay_opaque
 from gridplayer.utils.drop_zone import DropIndicator
 from gridplayer.utils.qt import MILLISECONDS, qt_connect, translate
@@ -141,6 +141,7 @@ class OverlayBlock(QWidget):
         self._is_on_chrome = False
         self._last_position = (0, 0)
         self._volume_button_wanted = True
+        self._bookmark_list_position = BookmarkListPosition.TOP_LEFT
 
         # what a failed cell offers past trying again; its Next goes back
         # where its list is played back to front
@@ -278,14 +279,18 @@ class OverlayBlock(QWidget):
 
         self.right_bar = QVBoxLayout()
 
-        # the bookmarks, to pick one to go to, up on the left under the title
+        # the bookmarks, to pick one to go to: in a corner, under the title
+        # or above the bar, on the left or the right of the volume's bar
         self.bookmark_list = OverlayBookmarkList(parent=self)
         self.left_bar = QVBoxLayout()
-        self.left_bar.addWidget(self.bookmark_list)
         self.left_bar.addStretch()
+        self.right_list_bar = QVBoxLayout()
+        self.right_list_bar.addStretch()
+        self._place_bookmark_list()
 
         self.middle.addLayout(self.left_bar)
         self.middle.addStretch()
+        self.middle.addLayout(self.right_list_bar)
         self.middle.addLayout(self.right_bar)
 
         self.volume_bar = OverlayVolumeBar(parent=self)
@@ -647,16 +652,59 @@ class OverlayBlock(QWidget):
         self._sync_progress_label()
         self._sync_bookmark_list()
 
+    def set_bookmark_list_position(self, position: BookmarkListPosition):
+        if position is self._bookmark_list_position:
+            return
+
+        self._bookmark_list_position = position
+        self._place_bookmark_list()
+        self._sync_bookmark_list()
+
+    @property
+    def bookmark_list_position(self) -> BookmarkListPosition:
+        return self._bookmark_list_position
+
+    def _place_bookmark_list(self):
+        """Into the corner it goes in: the side's column, at its top or its
+        bottom, the stretch the rest of it."""
+
+        position = self._bookmark_list_position
+        bookmark_list = self.bookmark_list
+
+        for bar in (self.left_bar, self.right_list_bar):
+            bar.removeWidget(bookmark_list)
+
+        if position is BookmarkListPosition.OFF:
+            return
+
+        is_left = position in {
+            BookmarkListPosition.TOP_LEFT,
+            BookmarkListPosition.BOTTOM_LEFT,
+        }
+        is_top = position in {
+            BookmarkListPosition.TOP_LEFT,
+            BookmarkListPosition.TOP_RIGHT,
+        }
+
+        bar = self.left_bar if is_left else self.right_list_bar
+        alignment = Qt.AlignLeft if is_left else Qt.AlignRight
+
+        if is_top:
+            bar.insertWidget(0, bookmark_list, 0, alignment)
+        else:
+            bar.addWidget(bookmark_list, 0, alignment)
+
     def _sync_bookmark_list(self):
         """Up while there are bookmarks to pick from in a video, and room in
-        the cell to spare for them."""
+        the cell to spare for them, and wherever it goes but off."""
 
         bookmark_list = self.bookmark_list
         width, height = self.width(), self.height()
 
         bookmark_list.setMaximumWidth(bookmark_list.max_width_in(width))
         bookmark_list.setVisible(
-            self._mode is OverlayMode.VIDEO
+            self._bookmark_list_position is not BookmarkListPosition.OFF
+            and self._mode is OverlayMode.VIDEO
             and bookmark_list.has_rows
             and bookmark_list.has_room(width, height)
         )

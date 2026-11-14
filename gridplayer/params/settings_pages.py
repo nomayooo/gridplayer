@@ -70,6 +70,7 @@ PLAYLIST_PAGE = (
         "playlist/show_overlay_border",
         "playlist/overlay_hide_on_timeout",
         Indented("playlist/overlay_timeout"),
+        "playlist/bookmark_list_position",
     ),
     Section(
         translate("SettingsDialog", "Grid"),

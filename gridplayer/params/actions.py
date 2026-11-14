@@ -4,6 +4,7 @@ from gridplayer.params.static import (
     ASPECT_RATIO_PRESETS,
     CROP_RATIO_PRESETS,
     AudioChannelMode,
+    BookmarkListPosition,
     GridMode,
     ListEndAction,
     ListFailAction,
@@ -333,6 +334,59 @@ ACTIONS = MappingProxyType(
             "show_if": "is_active_has_bookmarks",
             "menu_generator": "menu_generator_bookmarks",
             "is_menu_inline": True,
+        },
+        "Bookmark List Top Left": {
+            "title": translate("Bookmark List", "Top Left"),
+            "icon": "empty",
+            "func": ("set_bookmark_list_position_here", BookmarkListPosition.TOP_LEFT),
+            "check_if": (
+                "is_bookmark_list_position_set_to",
+                BookmarkListPosition.TOP_LEFT,
+            ),
+            "is_choice": True,
+        },
+        "Bookmark List Top Right": {
+            "title": translate("Bookmark List", "Top Right"),
+            "icon": "empty",
+            "func": ("set_bookmark_list_position_here", BookmarkListPosition.TOP_RIGHT),
+            "check_if": (
+                "is_bookmark_list_position_set_to",
+                BookmarkListPosition.TOP_RIGHT,
+            ),
+            "is_choice": True,
+        },
+        "Bookmark List Bottom Left": {
+            "title": translate("Bookmark List", "Bottom Left"),
+            "icon": "empty",
+            "func": (
+                "set_bookmark_list_position_here",
+                BookmarkListPosition.BOTTOM_LEFT,
+            ),
+            "check_if": (
+                "is_bookmark_list_position_set_to",
+                BookmarkListPosition.BOTTOM_LEFT,
+            ),
+            "is_choice": True,
+        },
+        "Bookmark List Bottom Right": {
+            "title": translate("Bookmark List", "Bottom Right"),
+            "icon": "empty",
+            "func": (
+                "set_bookmark_list_position_here",
+                BookmarkListPosition.BOTTOM_RIGHT,
+            ),
+            "check_if": (
+                "is_bookmark_list_position_set_to",
+                BookmarkListPosition.BOTTOM_RIGHT,
+            ),
+            "is_choice": True,
+        },
+        "Bookmark List Off": {
+            "title": translate("Bookmark List", "Off"),
+            "icon": "empty",
+            "func": ("set_bookmark_list_position_here", BookmarkListPosition.OFF),
+            "check_if": ("is_bookmark_list_position_set_to", BookmarkListPosition.OFF),
+            "is_choice": True,
         },
         "Manage Bookmarks": {
             "title": translate("Actions", "Manage Bookmarks…"),

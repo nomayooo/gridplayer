@@ -1,7 +1,8 @@
 """The bookmarks as a short list in a corner of the cell: none there with
 none, up once there are some, each a row to click to go there, the one the
 video last passed picked out, more than it shows a turn of the wheel away,
-and none in a cell too small to spare the room."""
+moved to another corner or off from the menu, and none in a cell too small
+to spare the room."""
 
 
 def _at(d, a, ms, what):
@@ -85,6 +86,37 @@ def scenario(d):
     QApplication.sendEvent(shown, event)
     d.check("scrolled down one", shown.shown_rows.start == 1, list(shown.shown_rows))
     d.shot("many", shown)
+
+    # moved from the menu, to the bottom right: there, and in a cell opened
+    # after too; and off
+    d.act(a, "Bookmark List Bottom Right")
+    a.overlay.lay_out_now()
+    d.pump()
+    middle = shown.geometry().center()
+    d.check(
+        "bottom right",
+        middle.x() > a.overlay.width() / 2 and middle.y() > a.overlay.height() / 2,
+        (middle.x(), middle.y(), a.overlay.width(), a.overlay.height()),
+    )
+    d.shot("bottom right", a)
+
+    d.open(d.media.clips[1])
+    b = d.wait_for_cell("b.mp4")
+    d.check(
+        "a cell opened after too",
+        b.overlay.bookmark_list_position == a.overlay.bookmark_list_position,
+        str(b.overlay.bookmark_list_position),
+    )
+    d.act(b, "Close")
+    d.wait_until(lambda: len(d.cells) == 1, "only a left")
+    d.ctx.active_block = a
+
+    d.act(a, "Bookmark List Off")
+    d.pump()
+    d.check("off", not shown.isVisibleTo(a.overlay))
+    d.act(a, "Bookmark List Top Left")
+    d.pump()
+    d.check("back", shown.isVisibleTo(a.overlay))
 
     # a cell too small
     d.player.resize(260, 200)
