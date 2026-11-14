@@ -101,6 +101,16 @@ def scenario(d):
     )
     d.shot("bottom right", a)
 
+    from gridplayer.params.static import BookmarkListPosition
+    from gridplayer.settings import Settings
+
+    d.check(
+        "kept for every playlist, the next time too",
+        Settings().sync_get("player/bookmark_list_position")
+        is BookmarkListPosition.BOTTOM_RIGHT,
+        str(Settings().sync_get("player/bookmark_list_position")),
+    )
+
     d.open(d.media.clips[1])
     b = d.wait_for_cell("b.mp4")
     d.check(
@@ -124,6 +134,7 @@ def scenario(d):
     QTest.keyClick(QApplication.focusWidget() or d.player, Qt.Key_M, Qt.ShiftModifier)
     d.pump()
     d.check("hidden with Shift+M", not shown.isVisibleTo(a.overlay))
+    d.check("kept hidden", not Settings().sync_get("player/show_bookmark_list"))
     d.check(
         "the button there still, empty", button.isVisibleTo(a.overlay) and button.is_off
     )
@@ -135,6 +146,22 @@ def scenario(d):
     d.check(
         "in its corner still", shown.geometry().center().x() < a.overlay.width() / 2
     )
+
+    d.check("kept shown", Settings().sync_get("player/show_bookmark_list"))
+
+    # another playlist, or none: the corner kept
+    d.act(a, "Bookmark List Bottom Left")
+    d.ctx.commands.close_playlist()
+    d.wait_until(lambda: not d.cells, "playlist closed")
+    d.open(clip)
+    a = d.wait_for_cell("a.mp4")
+    d.wait_until(lambda: a.is_playable, "plays again")
+    d.check(
+        "the corner kept after the playlist",
+        a.overlay.bookmark_list_position is BookmarkListPosition.BOTTOM_LEFT,
+        str(a.overlay.bookmark_list_position),
+    )
+    shown = a.overlay.bookmark_list
 
     # a cell too small
     d.player.resize(260, 200)

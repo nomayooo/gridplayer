@@ -70,8 +70,6 @@ PLAYLIST_PAGE = (
         "playlist/show_overlay_border",
         "playlist/overlay_hide_on_timeout",
         Indented("playlist/overlay_timeout"),
-        "playlist/show_bookmark_list",
-        Indented("playlist/bookmark_list_position"),
     ),
     Section(
         translate("SettingsDialog", "Grid"),
@@ -209,6 +207,8 @@ PAGES = (
                 "player/inhibit_screensaver",
                 "player/media_keys_background",
                 "player/seek_preview",
+                "player/show_bookmark_list",
+                Indented("player/bookmark_list_position"),
             ),
             Section(
                 tray_text(

@@ -233,9 +233,9 @@ class VideoBlocksManager(ManagerBase):
             "playlist/overlay_hide_on_timeout"
         )
         self._ctx.overlay_timeout = Settings().get("playlist/overlay_timeout")
-        self._ctx.is_show_bookmark_list = Settings().get("playlist/show_bookmark_list")
+        self._ctx.is_show_bookmark_list = Settings().get("player/show_bookmark_list")
         self._ctx.bookmark_list_position = Settings().get(
-            "playlist/bookmark_list_position"
+            "player/bookmark_list_position"
         )
         self._ctx.is_drag_ui = False
 
@@ -475,17 +475,18 @@ class VideoBlocksManager(ManagerBase):
             vb.overlay.set_bookmark_list_shown(is_shown)
 
     def toggle_show_bookmark_list(self):
-        """Shown or not, every video's; the playlist's own, as the others
-        there."""
+        """Shown or not, every video's, and kept so for the next time, in
+        whatever playlist."""
 
         value = not self._ctx.is_show_bookmark_list
-        PlaylistSettings().set("playlist/show_bookmark_list", value)
+        Settings().set("player/show_bookmark_list", value)
         self.set_show_bookmark_list(value)
 
     def set_bookmark_list_position_here(self, position):
-        """Picked from the menu: the playlist's own, as the others there."""
+        """Picked from the menu, and kept for the next time, in whatever
+        playlist."""
 
-        PlaylistSettings().set("playlist/bookmark_list_position", position)
+        Settings().set("player/bookmark_list_position", position)
         self.set_bookmark_list_position(position)
 
     def toggle_show_overlay_border(self):

@@ -71,6 +71,10 @@ _default_settings = {
     "player/video_init_timeout": 120,
     "player/inhibit_screensaver": True,
     "player/seek_preview": True,
+    # a video's bookmarks listed over it, to pick one from, and where;
+    # the same for every playlist
+    "player/show_bookmark_list": True,
+    "player/bookmark_list_position": BookmarkListPosition.TOP_LEFT,
     "player/media_keys_background": True,
     "player/one_instance": True,
     "player/stay_on_top": False,
@@ -146,8 +150,6 @@ _default_settings = {
     "playlist/show_overlay_border": True,
     "playlist/overlay_hide_on_timeout": True,
     "playlist/overlay_timeout": 3,
-    "playlist/show_bookmark_list": True,
-    "playlist/bookmark_list_position": BookmarkListPosition.TOP_LEFT,
     "video_defaults/cell_view_mode": VideoCellViewMode.FILL,
     "video_defaults/aspect_ratio": "",
     "video_defaults/transform": VideoTransform.NONE,

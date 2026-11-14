@@ -16,7 +16,6 @@ from gridplayer.models.video import (
 )
 from gridplayer.params.settings_bindings import VIDEO_PARAM_ATTRS
 from gridplayer.params.static import (
-    BookmarkListPosition,
     SeekSyncMode,
     UnsavedChangesMode,
     WindowState,
@@ -63,8 +62,6 @@ class PlaylistManager(ManagerBase):
     pause_background_videos_loaded = pyqtSignal(bool)
     pause_minimized_loaded = pyqtSignal(bool)
     show_overlay_border_loaded = pyqtSignal(bool)
-    show_bookmark_list_loaded = pyqtSignal(bool)
-    bookmark_list_position_loaded = pyqtSignal(BookmarkListPosition)
     overlay_hide_on_timeout_loaded = pyqtSignal(bool)
     overlay_timeout_loaded = pyqtSignal(int)
     subtitle_encoding_loaded = pyqtSignal(str)
@@ -618,14 +615,6 @@ class PlaylistManager(ManagerBase):
                 (
                     self.overlay_timeout_loaded,
                     session.get("playlist/overlay_timeout"),
-                ),
-                (
-                    self.show_bookmark_list_loaded,
-                    session.get("playlist/show_bookmark_list"),
-                ),
-                (
-                    self.bookmark_list_position_loaded,
-                    session.get("playlist/bookmark_list_position"),
                 ),
                 (
                     self.subtitle_encoding_loaded,

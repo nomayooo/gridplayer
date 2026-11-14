@@ -224,20 +224,6 @@ PLAYLIST_FIELDS: tuple[SettingField, ...] = (
         enabled_when=When("playlist/overlay_hide_on_timeout"),
     ),
     CheckboxField(
-        settings_key="playlist/show_bookmark_list",
-        label=translate("Bookmark List", "Show Bookmark List"),
-        tooltip=translate(
-            "Bookmark List",
-            "List a video's bookmarks over it, to pick one to go to",
-        ),
-    ),
-    ComboField(
-        settings_key="playlist/bookmark_list_position",
-        label=translate("SettingsDialog", "Bookmark list position"),
-        choices=choices.bookmark_list_positions,
-        enabled_when=When("playlist/show_bookmark_list"),
-    ),
-    CheckboxField(
         settings_key="playlist/shuffle_on_load",
         label=translate("Playlist Settings", "Shuffle on load"),
     ),
