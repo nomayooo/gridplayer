@@ -5,13 +5,15 @@ pass starts somewhere at random.
 A loop is made in two steps. Set Loop Start begins one where the video is,
 and until it is finished the video plays from there to the end of the file
 and round, the loops made before it waiting; a seek may go anywhere, before
-it too, so that it can be put wherever it is wanted, Set Loop Start again
-moving it there. Set Loop End finishes it where the video is then, and it
-joins the others, playing; without one begun, Set Loop End does nothing.
-A-B Loop is both on one key: it begins one without one begun, and finishes
-the one begun otherwise. Undo Loop Marker takes them back a step at a
-time: the end of the last loop made, leaving it begun from its start, or
-the start of the one begun.
+it too. Set Loop Start again begins another there, the one before it kept
+begun too, waiting. Set Loop End finishes the one begun last where the
+video is then, and it joins the others; the one begun before it, if any,
+is then the one begun, playing, for the next end. Without one begun, Set
+Loop End does nothing. A-B Loop is both on one key: it finishes the one
+begun last where the video is past its start, and begins another
+otherwise. Undo Loop Marker takes them back a step at a time: the start
+of the one begun last, or else the end of the last loop made, leaving it
+begun from its start.
 
 Next and Previous Loop go from one loop made to another, in the order they
 were made and round again; with only one, back to its start. With a loop
@@ -56,12 +58,20 @@ class LoopControl(VideoBlockPart):
 
     @only_seekable
     def set_start_time(self, new_time: int):
-        """Begin a loop here, or move the start of the one begun."""
+        """Begin a loop here, any begun before it kept begun, waiting."""
 
         if new_time is None:
             return
 
-        self._params.loop_start = new_time
+        params = self._params
+
+        if params.loop_start == new_time:
+            return
+
+        if params.loop_start is not None:
+            params.earlier_loop_starts.append(params.loop_start)
+
+        params.loop_start = new_time
 
         self.announce()
 
@@ -71,8 +81,8 @@ class LoopControl(VideoBlockPart):
 
     @only_seekable
     def set_end_time(self, new_time: int):
-        """Finish the loop begun here, and play it; nothing without one, or
-        here being no later than it starts."""
+        """Finish the loop begun last here; nothing without one, or here
+        being no later than it starts. Without another begun, it plays."""
 
         start = self._params.loop_start
 
@@ -83,8 +93,8 @@ class LoopControl(VideoBlockPart):
 
     @only_seekable
     def set_start_or_end(self):
-        """Begin a loop here without one begun, else finish the one begun
-        here; here being no later than it starts, it is begun here again."""
+        """Finish the loop begun last here, here being past its start; else
+        begin another here."""
 
         start = self._params.loop_start
         time = self._block.time
@@ -95,16 +105,21 @@ class LoopControl(VideoBlockPart):
             self.set_end_time(time)
 
     def replace_with(self, span: LoopSpan):
-        """This one loop in place of any there were."""
+        """This one loop in place of any there were, finished or begun."""
 
         self._params.loops = []
+        self._params.loop_start = None
+        self._params.earlier_loop_starts = []
         self._add(span)
 
     def _add(self, span: LoopSpan):
-        self._params.loops.append(span)
-        self._params.loop_index = len(self._params.loops) - 1
-        self._params.loop_start = None
-        self._params.is_outside_loops = False
+        params = self._params
+
+        params.loops.append(span)
+        params.loop_index = len(params.loops) - 1
+        # the one begun before it begun again, if any
+        params.loop_start = self._take_earlier_start()
+        params.is_outside_loops = False
 
         self.announce()
 
@@ -120,18 +135,19 @@ class LoopControl(VideoBlockPart):
         self._params.loops = []
         self._params.loop_index = 0
         self._params.loop_start = None
+        self._params.earlier_loop_starts = []
         self._params.is_outside_loops = False
 
         self.announce()
 
     @only_seekable
     def remove_last(self):
-        """Take back the loop begun, or else the last one made."""
+        """Take back the loop begun last, or else the last one made."""
 
         params = self._params
 
         if params.loop_start is not None:
-            params.loop_start = None
+            params.loop_start = self._take_earlier_start()
         elif params.loops:
             params.loops.pop()
             if params.loop_index >= len(params.loops):
@@ -143,14 +159,15 @@ class LoopControl(VideoBlockPart):
 
     @only_seekable
     def undo_marker(self):
-        """Take back the last marker set: the start of the loop begun, or
-        else the end of the last one made, which is begun again from its
-        start, for another end to be set."""
+        """Take back the last marker set: the start of the loop begun last,
+        the one begun before it begun again, or else the end of the last one
+        made, which is begun again from its start, for another end to be
+        set."""
 
         params = self._params
 
         if params.loop_start is not None:
-            params.loop_start = None
+            params.loop_start = self._take_earlier_start()
         elif params.loops:
             start, _ = params.loops.pop()
             params.loop_start = start
@@ -195,7 +212,10 @@ class LoopControl(VideoBlockPart):
         where the video is, or the one before, round the ends of them."""
 
         params = self._params
-        starts = sorted({start for start, _ in params.loops} | {params.loop_start})
+        starts = sorted(
+            {start for start, _ in params.loops}
+            | {params.loop_start, *params.earlier_loop_starts}
+        )
 
         now = self._block.time or 0
 
@@ -207,6 +227,10 @@ class LoopControl(VideoBlockPart):
             target = earlier[-1] if earlier else starts[-1]
 
         self._block.seek(target)
+
+    def _take_earlier_start(self) -> int | None:
+        earlier = self._params.earlier_loop_starts
+        return earlier.pop() if earlier else None
 
     def rejoin(self):
         """Back to the loop playing, from outside every one."""
@@ -290,7 +314,12 @@ class LoopControl(VideoBlockPart):
             or index != params.loop_index
         )
 
-        block.loops_change.emit(others)
+        # the starts of those begun before the one begun last, waiting
+        waiting = tuple(
+            (self._fraction(start), 1.0) for start in params.earlier_loop_starts
+        )
+
+        block.loops_change.emit(others + waiting)
 
     def _fraction(self, time_ms: int) -> float:
         length = self._length()

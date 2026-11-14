@@ -593,8 +593,11 @@ class ManageFavouritesDialog(QDialog):
 
     def _video_item(self, video: FavouriteVideo) -> QTreeWidgetItem:
         loops = [count_txt(len(video.loops))] if video.loops else []
-        if video.loop_start is not None:
-            loops.append(_loop_start_txt(video.loop_start))
+        loops.extend(
+            _loop_start_txt(start)
+            for start in (*video.earlier_loop_starts, video.loop_start)
+            if start is not None
+        )
 
         opens_at = (
             "" if video.position is None else ms_time_txt(video.position, strip=True)

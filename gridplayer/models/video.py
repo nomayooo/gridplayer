@@ -185,6 +185,9 @@ class Video(BaseModel):
     # Loop End has not finished. Meanwhile it plays from there to the end of
     # the file and round, the loops made before it waiting
     loop_start: int | None = None
+    # the loops begun before it and not finished either, oldest first: each
+    # the one begun again once the one after it is finished or taken back
+    earlier_loop_starts: list[int] = Field(default_factory=list)
     # played as it is, from where a viewer's seek outside every loop landed,
     # until it plays into one of them or reaches the end of the file, which
     # goes back to the one playing
@@ -356,6 +359,13 @@ class Video(BaseModel):
     def _loop_index_in_range(self) -> "Video":
         if not 0 <= self.loop_index < max(len(self.loops), 1):
             self.loop_index = 0
+
+        return self
+
+    @model_validator(mode="after")
+    def _a_loop_begun_with_those_before_it(self) -> "Video":
+        if self.loop_start is None and self.earlier_loop_starts:
+            self.loop_start = self.earlier_loop_starts.pop()
 
         return self
 

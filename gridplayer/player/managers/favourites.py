@@ -476,6 +476,7 @@ def _favourite_of_video(
         path=params.uri,
         loops=list(params.loops),
         loop_start=params.loop_start,
+        earlier_loop_starts=list(params.earlier_loop_starts),
         position=params.current_position,
         loop_index=params.loop_index,
         is_outside_loops=params.is_outside_loops,

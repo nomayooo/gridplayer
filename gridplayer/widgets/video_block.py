@@ -1656,6 +1656,7 @@ class VideoBlock(QWidget):
         self.video_params.loops = list(snapshot.loops)
         self.video_params.loop_index = snapshot.loop_index
         self.video_params.loop_start = snapshot.loop_start
+        self.video_params.earlier_loop_starts = list(snapshot.earlier_loop_starts)
         self.video_params.is_outside_loops = snapshot.is_outside_loops
         self.loop.announce()
         self.set_rate(snapshot.rate, is_silent=True)

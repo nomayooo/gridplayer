@@ -35,6 +35,8 @@ class FavouriteVideo(BaseModel):
     # where a loop begun and not yet finished starts (models.video's
     # loop_start), None for none
     loop_start: int | None = None
+    # those begun before it and not finished either (models.video's own)
+    earlier_loop_starts: list[int] = Field(default_factory=list)
     # where in it it was when made a favourite, opened there again: in ms,
     # None for one made before favourites kept it, opened as it opens
     position: int | None = None
