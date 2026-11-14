@@ -305,15 +305,6 @@ SECTIONS = MappingProxyType(
                     "Chapter List",
                 ),
                 (
-                    "Bookmarks",
-                    "Add Bookmark",
-                    "Previous Bookmark",
-                    "Next Bookmark",
-                    "Manage Bookmarks",
-                    "---",
-                    "Bookmark List",
-                ),
-                (
                     "Loop",
                     "Random Loop",
                     "---",
@@ -345,6 +336,15 @@ SECTIONS = MappingProxyType(
                     "Slower",
                     "Normal",
                 ),
+            ),
+            (
+                "Bookmarks",
+                "Add Bookmark",
+                "Previous Bookmark",
+                "Next Bookmark",
+                "Manage Bookmarks",
+                "---",
+                "Bookmark List",
             ),
             (
                 "Sync Others",

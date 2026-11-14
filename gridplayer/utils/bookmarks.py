@@ -341,6 +341,36 @@ def next_bookmark_index(
     return ahead[0] if ahead else None
 
 
+def next_bookmark_cycling(
+    bookmarks, time_ms: int, start_ms: int, end_ms: int
+) -> int | None:
+    """The next one ahead, else round to the first: None only where there
+    are none within reach."""
+
+    index = next_bookmark_index(bookmarks, time_ms, start_ms, end_ms)
+
+    if index is None:
+        reachable = _reachable(bookmarks, start_ms, end_ms)
+        index = reachable[0] if reachable else None
+
+    return index
+
+
+def previous_bookmark_cycling(
+    bookmarks, time_ms: int, start_ms: int, end_ms: int
+) -> int | None:
+    """The one behind, else round to the last: None only where there are
+    none within reach."""
+
+    index = previous_bookmark_index(bookmarks, time_ms, start_ms, end_ms)
+
+    if index is None:
+        reachable = _reachable(bookmarks, start_ms, end_ms)
+        index = reachable[-1] if reachable else None
+
+    return index
+
+
 def previous_bookmark_index(
     bookmarks, time_ms: int, start_ms: int, end_ms: int
 ) -> int | None:

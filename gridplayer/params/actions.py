@@ -306,18 +306,21 @@ ACTIONS = MappingProxyType(
         },
         "Add Bookmark": {
             "title": translate("Actions", "Add Bookmark"),
+            "key": "M",
             "icon": "bookmark-add",
             "func": ("active", "bookmarker.add"),
             "show_if": "is_active_seekable",
         },
         "Previous Bookmark": {
             "title": translate("Actions", "Previous Bookmark"),
+            "key": "Alt+,",
             "icon": "bookmark-previous",
             "func": ("active", "manual_seek", "bookmarker.previous"),
             "show_if": "is_active_has_bookmarks",
         },
         "Next Bookmark": {
             "title": translate("Actions", "Next Bookmark"),
+            "key": "Alt+.",
             "icon": "bookmark-next",
             "func": ("active", "manual_seek", "bookmarker.next"),
             "show_if": "is_active_has_bookmarks",

@@ -35,14 +35,15 @@ def _submenu(items, *path):
 
 
 class TestWhereTheyAre:
-    def test_bookmarks_sit_in_playback_right_after_the_chapters(self):
+    def test_bookmarks_sit_at_the_top_of_the_menu_right_after_playback(self):
+        names = [i[0] for i in SECTIONS["video_active"] if isinstance(i, tuple)]
         playback = _submenu(SECTIONS["video_active"], "Playback")
-        names = [item[0] for item in playback if isinstance(item, tuple)]
 
-        assert names.index("Bookmarks") == names.index("Chapters") + 1
+        assert names.index("Bookmarks") == names.index("Playback") + 1
+        assert "Bookmarks" not in [i[0] for i in playback if isinstance(i, tuple)]
 
     def test_adding_jumping_and_the_manager_come_first_then_the_list(self):
-        bookmarks = _submenu(SECTIONS["video_active"], "Playback", "Bookmarks")
+        bookmarks = _submenu(SECTIONS["video_active"], "Bookmarks")
 
         assert bookmarks == [
             "Add Bookmark",
@@ -68,8 +69,33 @@ class TestWhereTheyAre:
 
 
 class TestTheirKeys:
-    def test_none_come_with_a_key(self):
-        for name in BOOKMARK_ACTIONS:
+    def test_adding_and_jumping_come_with_keys(self):
+        """M to mark one, Alt with the keys Next and Previous Loop have
+        with Ctrl to go from one to another."""
+
+        assert (
+            ACTIONS["Add Bookmark"]["key"],
+            ACTIONS["Previous Bookmark"]["key"],
+            ACTIONS["Next Bookmark"]["key"],
+        ) == ("M", "Alt+,", "Alt+.")
+
+    def test_no_other_action_has_them(self):
+        taken = {}
+        for name, action in ACTIONS.items():
+            keys = action.get("keys") or [action.get("key")]
+            for key in keys:
+                if key:
+                    taken.setdefault(key, []).append(name)
+
+        for key in ("M", "Alt+,", "Alt+."):
+            assert len(taken[key]) == 1, (key, taken[key])
+
+    def test_the_rest_come_without(self):
+        for name in (
+            "Manage Bookmarks",
+            "Previous Bookmark [ALL]",
+            "Next Bookmark [ALL]",
+        ):
             assert "key" not in ACTIONS[name], name
             assert "keys" not in ACTIONS[name], name
 
