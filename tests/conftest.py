@@ -8,7 +8,9 @@ from PyQt5.QtWidgets import QApplication
 from requests.cookies import RequestsCookieJar
 
 from gridplayer.params.static import ProxyMode
+from gridplayer.player.managers import bookmarks as bookmarks_manager
 from gridplayer.playlist_settings import PlaylistSettings
+from gridplayer.settings import default_value
 from gridplayer.utils import cache, cookies, network
 
 # Draw nowhere. A widget a test shows is a real window on this desktop
@@ -208,6 +210,33 @@ def _no_real_network_settings(monkeypatch):
     monkeypatch.setattr(
         network, "Settings", lambda: FakeSettings(DEFAULT_NETWORK_SETTINGS)
     )
+
+
+class StoredSettings:
+    """Settings kept in a dict of their own, each out of the box until set."""
+
+    def __init__(self):
+        self.values = {}
+
+    def get(self, key):
+        return self.values.get(key, default_value(key))
+
+    def sync_get(self, key):
+        return self.get(key)
+
+    def set(self, key, value):
+        self.values[key] = value
+
+
+@pytest.fixture(autouse=True)
+def remembered_bookmarks(monkeypatch):
+    """Away from the bookmarks the user's player remembers, and leaving none
+    there: each test with its own, none to begin with."""
+
+    stored = StoredSettings()
+    monkeypatch.setattr(bookmarks_manager, "Settings", lambda: stored)
+
+    return stored
 
 
 @pytest.fixture(autouse=True)
