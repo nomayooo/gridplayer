@@ -26,6 +26,7 @@ loop_end and time_changed); here is only how the viewer sets them.
 
 from gridplayer.models.video import LoopSpan
 from gridplayer.widgets.video_block_guards import VideoBlockPart, only_seekable
+from gridplayer.widgets.video_overlay_elements import loop_color
 
 # a marker the video is at, or just past, is the one it is at: the next is
 # the one after it, the one before the one before it
@@ -290,8 +291,8 @@ class LoopControl(VideoBlockPart):
     # showing them
 
     def announce(self):
-        """Tell the overlay where the loops are: the one playing, and the
-        rest apart from it."""
+        """Tell the overlay where the loops are, each in its own colour: the
+        one playing, and the rest apart from it."""
 
         block = self._block
         params = self._params
@@ -306,8 +307,14 @@ class LoopControl(VideoBlockPart):
             block.loop_start_change.emit(self._fraction(start))
             block.loop_end_change.emit(100.0 if end is None else self._fraction(end))
 
+        block.loop_color_change.emit(self._current_color())
+
         others = tuple(
-            (self._fraction(start), 1.0 if end is None else self._fraction(end))
+            (
+                self._fraction(start),
+                1.0 if end is None else self._fraction(end),
+                loop_color(index),
+            )
             for index, (start, end) in enumerate(params.loops)
             if params.loop_start is not None
             or params.is_outside_loops
@@ -316,10 +323,33 @@ class LoopControl(VideoBlockPart):
 
         # the starts of those begun before the one begun last, waiting
         waiting = tuple(
-            (self._fraction(start), 1.0) for start in params.earlier_loop_starts
+            (self._fraction(start), 1.0, loop_color(index))
+            for index, start in self._waiting_starts()
         )
 
         block.loops_change.emit(others + waiting)
+
+    def _current_color(self) -> str:
+        params = self._params
+
+        if params.loop_start is not None:
+            return loop_color(len(params.loops))
+
+        return loop_color(params.loop_index)
+
+    def _waiting_starts(self) -> list[tuple[int, int]]:
+        """Those begun before the one begun last, each with the place it
+        will have among the loops: the one begun last finished first, the
+        one begun before it next, and so on, so that each keeps its colour
+        from its start to its end."""
+
+        params = self._params
+        after_last = len(params.loops) + 1
+
+        return [
+            (after_last + offset, start)
+            for offset, start in enumerate(reversed(params.earlier_loop_starts))
+        ]
 
     def _fraction(self, time_ms: int) -> float:
         length = self._length()

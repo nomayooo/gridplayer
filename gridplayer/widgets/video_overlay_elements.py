@@ -56,13 +56,29 @@ BAR_PROGRESS_COLOR_ON_RED = "#47d147"
 BAR_SELECT_COLOR = "#4775d1"
 BAR_AHEAD_FADE = 0.4
 
-# Loops are marked by full-height lines at their start and end: the one
-# playing, or being made, green and wider, the rest blue, a softer one than
-# pure blue, which glares. Each line is centred on its time.
-LOOP_MARK_COLOR = "#00ff00"
+# Loops are marked by full-height lines at their start and end, each loop's
+# pair in a colour of its own, as "[" at its start and "]" at its end: the
+# one playing, or being made, wider. Each line is centred on its time.
+#
+# The colours are light and far apart in hue, and none of them red, pink or
+# the bookmarks' amber; no one colour stands out against every bar there is
+# (the red played, the blue under the mouse, the green of a reddish video,
+# the light rest), so each line is edged in black, which does, at 4:1 or
+# more against each of those, and the colour at 13:1 or more against it.
+LOOP_COLORS = ("#ffeb3b", "#18ffff", "#76ff03", "#b388ff", "#ffffff")
+LOOP_MARK_EDGE_COLOR = "#000000"
 LOOP_MARK_WIDTH = 3
-OTHER_LOOP_MARK_COLOR = "#1e90ff"
 OTHER_LOOP_MARK_WIDTH = 2
+# how far the top and bottom of a "[" or "]" reach in, and how thick
+LOOP_MARK_TAB_LENGTH = 4
+LOOP_MARK_TAB_THICKNESS = 2
+
+
+def loop_color(index: int) -> str:
+    """The colour of the loop at this place among them, round again."""
+
+    return LOOP_COLORS[index % len(LOOP_COLORS)]
+
 
 # the ring round a cell picked out with others, to be moved to a new window
 SELECTION_COLOR = "#2f80ed"
@@ -1533,7 +1549,9 @@ class OverlayProgressBar(OverlayBar):
         self._position = 0
         self._loop_start = 0
         self._loop_end = 100
-        # the loops other than the one playing, as (start, end) fractions
+        self._loop_color = loop_color(0)
+        # the loops other than the one playing, as (start, end, colour), the
+        # times as fractions
         self._other_loops = ()
         self._marks = ()
         self.progress_select_x = None
@@ -1624,21 +1642,24 @@ class OverlayProgressBar(OverlayBar):
         self.draw_chapter_notches(painter)
 
         # the loops waiting their turn under the one playing
-        other_color = QColor(OTHER_LOOP_MARK_COLOR)
-        for start, end in self._other_loops:
+        for start, end, color in self._other_loops:
             if start > 0:
-                self.draw_loop_mark(painter, start, other_color, OTHER_LOOP_MARK_WIDTH)
+                self.draw_loop_mark(
+                    painter, start, QColor(color), OTHER_LOOP_MARK_WIDTH, 1
+                )
             if end < 1:
-                self.draw_loop_mark(painter, end, other_color, OTHER_LOOP_MARK_WIDTH)
+                self.draw_loop_mark(
+                    painter, end, QColor(color), OTHER_LOOP_MARK_WIDTH, -1
+                )
 
         # and the one playing
-        color = QColor(LOOP_MARK_COLOR)
+        color = QColor(self._loop_color)
 
         if self.loop_start > 0:
-            self.draw_loop_mark(painter, self.loop_start, color, LOOP_MARK_WIDTH)
+            self.draw_loop_mark(painter, self.loop_start, color, LOOP_MARK_WIDTH, 1)
 
         if self.loop_end < 100:
-            self.draw_loop_mark(painter, self.loop_end, color, LOOP_MARK_WIDTH)
+            self.draw_loop_mark(painter, self.loop_end, color, LOOP_MARK_WIDTH, -1)
 
     def _filled_parts(self, is_hovered):
         """What is played from the left, and under the mouse up to it."""
@@ -1662,12 +1683,31 @@ class OverlayProgressBar(OverlayBar):
             (QRect(played, 0, mouse - played, height), self.color_ahead),
         ]
 
-    def draw_loop_mark(self, painter, fraction, color, width):
-        """A full-height line centred on where a loop starts or ends."""
+    def draw_loop_mark(self, painter, fraction, color, width, inward):
+        """A full-height line centred on where a loop starts or ends, its top
+        and bottom reaching in towards the rest of the loop (inward 1 for a
+        start, -1 for an end), as "[" or "]", all of it edged in black."""
 
         x = math.ceil(self.width() * fraction) - width // 2
+        height = self.height()
 
-        painter.fillRect(QRect(x, 0, width, self.height()), color)
+        line = QRect(x, 0, width, height)
+        tab_x = x + width if inward > 0 else x - LOOP_MARK_TAB_LENGTH
+        tabs = [
+            QRect(tab_x, 0, LOOP_MARK_TAB_LENGTH, LOOP_MARK_TAB_THICKNESS),
+            QRect(
+                tab_x,
+                height - LOOP_MARK_TAB_THICKNESS,
+                LOOP_MARK_TAB_LENGTH,
+                LOOP_MARK_TAB_THICKNESS,
+            ),
+        ]
+
+        edge = QColor(LOOP_MARK_EDGE_COLOR)
+        for part in (line, *tabs):
+            painter.fillRect(part.adjusted(-1, -1, 1, 1), edge)
+        for part in (line, *tabs):
+            painter.fillRect(part, color)
 
     def draw_hovered_chapter(self, painter):
         """Set the chapter under the mouse apart from the rest of the bar."""
@@ -1836,6 +1876,15 @@ class OverlayProgressBar(OverlayBar):
     @property
     def loop_end(self):
         return self._loop_end
+
+    @property
+    def loop_color(self):
+        return self._loop_color
+
+    @loop_color.setter
+    def loop_color(self, color):
+        self._loop_color = color
+        self.update()
 
     @property
     def other_loops(self):

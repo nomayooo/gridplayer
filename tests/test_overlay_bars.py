@@ -5,15 +5,20 @@ from PyQt5.QtCore import QPoint, Qt
 from PyQt5.QtGui import QColor, QImage, QPainter
 
 from gridplayer.widgets.video_overlay_elements import (
+    BAR_PROGRESS_COLOR,
+    BAR_PROGRESS_COLOR_ON_RED,
+    BAR_SELECT_COLOR,
     BOX_FILL_ALPHA,
     BOX_RADIUS,
-    LOOP_MARK_COLOR,
+    LOOP_COLORS,
+    LOOP_MARK_EDGE_COLOR,
+    LOOP_MARK_TAB_LENGTH,
     LOOP_MARK_WIDTH,
-    OTHER_LOOP_MARK_COLOR,
     OTHER_LOOP_MARK_WIDTH,
     OverlayLabel,
     OverlayProgressBar,
     OverlayVolumeBar,
+    loop_color,
 )
 
 DARK_PICTURE = QColor("#101010")
@@ -137,6 +142,9 @@ def _line_at(image, x, y):
     return QColor(color).name(), right - left + 1
 
 
+WAITING_COLOR = LOOP_COLORS[1]
+
+
 class TestLoopMarks:
     """On the 200px bar: the loop playing from 50px to 100px, another
     waiting from 150px to 180px."""
@@ -145,37 +153,101 @@ class TestLoopMarks:
     def image(self, seek_bar):
         seek_bar.loop_start = 0.25
         seek_bar.loop_end = 0.5
-        seek_bar.other_loops = ((0.75, 0.9),)
+        seek_bar.loop_color = loop_color(0)
+        seek_bar.other_loops = ((0.75, 0.9, WAITING_COLOR),)
 
         return _over_dark_picture(seek_bar)
 
     @pytest.mark.parametrize("x", [50, 100])
-    def test_the_loop_playing_is_green_and_widest(self, image, x):
+    def test_the_loop_playing_in_its_colour_and_widest(self, image, x):
         assert _line_at(image, x, image.height() // 2) == (
-            LOOP_MARK_COLOR,
+            loop_color(0),
             LOOP_MARK_WIDTH,
         )
 
     @pytest.mark.parametrize("x", [150, 180])
-    def test_the_loops_waiting_are_blue(self, image, x):
+    def test_one_waiting_in_its_own_colour_both_ends(self, image, x):
         assert _line_at(image, x, image.height() // 2) == (
-            OTHER_LOOP_MARK_COLOR,
+            WAITING_COLOR,
             OTHER_LOOP_MARK_WIDTH,
         )
 
-    def test_a_loop_alone_is_green_and_widest_too(self, seek_bar):
-        seek_bar.loop_start = 0.25
-        seek_bar.loop_end = 0.5
+    @pytest.mark.parametrize(("x", "width"), [(50, 3), (150, 2)])
+    def test_each_line_edged_in_black(self, image, x, width):
+        middle = image.height() // 2
+        left = x - width // 2 - 1
+        right = left + width + 1
 
-        image = _over_dark_picture(seek_bar)
+        for edge in (left, right):
+            assert QColor(image.pixel(edge, middle)).name() == LOOP_MARK_EDGE_COLOR
 
-        assert _line_at(image, 50, image.height() // 2) == (
-            LOOP_MARK_COLOR,
-            LOOP_MARK_WIDTH,
-        )
+    def test_a_start_reaches_in_to_the_right_an_end_to_the_left(self, image):
+        """As "[" and "]": the top of each, a pixel down."""
+
+        start_tab = 50 - LOOP_MARK_WIDTH // 2 + LOOP_MARK_WIDTH + 1
+        end_tab = 100 - LOOP_MARK_WIDTH // 2 - 2
+
+        assert QColor(image.pixel(start_tab, 1)).name() == loop_color(0)
+        assert QColor(image.pixel(end_tab, 1)).name() == loop_color(0)
+        # and not out the other way
+        outside_start = 50 - LOOP_MARK_WIDTH // 2 - 3
+        assert QColor(image.pixel(outside_start, 1)).name() != loop_color(0)
 
     def test_the_lines_are_3_and_2_pixels(self):
         assert (LOOP_MARK_WIDTH, OTHER_LOOP_MARK_WIDTH) == (3, 2)
+        assert LOOP_MARK_TAB_LENGTH >= 3
+
+
+def _contrast(a, b):
+    def luminance(color):
+        def channel(c):
+            c /= 255
+            return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+        q = QColor(color)
+        return (
+            0.2126 * channel(q.red())
+            + 0.7152 * channel(q.green())
+            + 0.0722 * channel(q.blue())
+        )
+
+    high, low = sorted((luminance(a), luminance(b)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+class TestLoopColours:
+    """Told apart from one another, and seen on any bar: the black edge
+    against the bar at least 3:1, as WCAG asks of a graphic, and each colour
+    against its edge."""
+
+    BARS = (
+        BAR_PROGRESS_COLOR,
+        BAR_PROGRESS_COLOR_ON_RED,
+        BAR_SELECT_COLOR,
+        "#f2f2f2",
+        "#ffffff",
+    )
+
+    @pytest.mark.parametrize("bar", BARS)
+    def test_the_edge_stands_out_on_every_bar(self, bar):
+        assert _contrast(LOOP_MARK_EDGE_COLOR, bar) >= 3
+
+    @pytest.mark.parametrize("color", LOOP_COLORS)
+    def test_each_colour_stands_out_on_its_edge(self, color):
+        assert _contrast(color, LOOP_MARK_EDGE_COLOR) >= 4.5
+
+    def test_none_red_pink_or_the_bookmarks_amber(self):
+        for color in LOOP_COLORS:
+            hue = QColor(color).hue()
+            # white has none
+            # red and pink round 0, the bookmarks amber at 40
+            assert hue == -1 or 50 <= hue <= 290, color
+
+    def test_all_apart(self):
+        assert len(set(LOOP_COLORS)) == len(LOOP_COLORS) >= 5
+
+    def test_round_again_past_the_last(self):
+        assert loop_color(len(LOOP_COLORS)) == loop_color(0)
 
 
 class TestSeeThrough:
