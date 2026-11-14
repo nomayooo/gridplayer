@@ -38,6 +38,7 @@ from gridplayer.models.favourites import (
     FolderPath,
     added_now,
     folders_within,
+    newest,
     sorted_by,
     videos_in,
 )
@@ -74,8 +75,20 @@ def _added_txt(added) -> str:
 
 
 def _added_of(tree_item):
+    """As the tree has it now: for a folder, the latest of it and all it
+    holds (models.favourites.latest_added)."""
+
     video = tree_item.data(0, ITEM_FAVOURITE)
-    return tree_item.data(0, ITEM_ADDED) if video is None else video.added
+
+    if video is not None:
+        return video.added
+
+    return newest(
+        [
+            tree_item.data(0, ITEM_ADDED),
+            *(_added_of(tree_item.child(i)) for i in range(tree_item.childCount())),
+        ]
+    )
 
 
 def _all_within(parent_item) -> list:
@@ -541,6 +554,12 @@ class ManageFavouritesDialog(QDialog):
         self.tree.expandAll()
         self._update_buttons()
 
+        # one moved, made or removed: the folders dated again, and placed
+        # again sorted by date
+        self._is_refresh_due = False
+        self.tree.model().rowsInserted.connect(self._contents_changed)
+        self.tree.model().rowsRemoved.connect(self._contents_changed)
+
         sort = Settings().get("favourites/sort")
         self.sort_box.setCurrentIndex(max(self.sort_box.findData(sort), 0))
         self.sort_by(self.sort_box.currentData())
@@ -723,11 +742,37 @@ class ManageFavouritesDialog(QDialog):
         self._next_order += 1
         return self._next_order
 
+    def _show_folder_dates(self):
+        """Each folder dated by the latest within it, as it is sorted."""
+
+        for tree_item in _all_within(self.tree.invisibleRootItem()):
+            if tree_item.data(0, ITEM_FAVOURITE) is None:
+                tree_item.setText(COLUMN_ADDED, _added_txt(_added_of(tree_item)))
+
+    def _contents_changed(self, *_):
+        if self._is_sorting or self._is_refresh_due:
+            return
+
+        self._is_refresh_due = True
+        QTimer.singleShot(0, self._refresh)
+
+    def _refresh(self):
+        self._is_refresh_due = False
+
+        if self.sort in {FavouritesSort.ADDED, FavouritesSort.ADDED_DESC}:
+            self._sort_all(self.tree.invisibleRootItem())
+        else:
+            self._show_folder_dates()
+
     def _sort_all(self, parent_item):
+        self._show_folder_dates()
+        self._sort_tree(parent_item)
+
+    def _sort_tree(self, parent_item):
         self._sort_children(parent_item)
 
         for index in range(parent_item.childCount()):
-            self._sort_all(parent_item.child(index))
+            self._sort_tree(parent_item.child(index))
 
     def _sort_children(self, parent_item):
         shown = [parent_item.child(i) for i in range(parent_item.childCount())]

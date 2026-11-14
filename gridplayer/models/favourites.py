@@ -280,8 +280,24 @@ def in_sort(
         list(enumerate(items)),
         sort,
         name_of=lambda entry: entry[1].name,
-        added_of=lambda entry: entry[1].added,
+        added_of=lambda entry: latest_added(entry[1]),
     )
+
+
+def latest_added(item: FavouriteItem) -> datetime | None:
+    """When a favourite was added; for a folder, the latest of when it was
+    and when anything within it was, at any depth, for one a video was just
+    added to to go up with the videos just added. None for none known."""
+
+    if isinstance(item, FavouriteVideo):
+        return item.added
+
+    return newest([item.added, *(latest_added(i) for i in item.items)])
+
+
+def newest(dates) -> datetime | None:
+    known = [date for date in dates if date is not None]
+    return max(known) if known else None
 
 
 def sorted_deep(items: list[FavouriteItem], sort: FavouritesSort) -> list:
