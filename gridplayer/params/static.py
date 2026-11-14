@@ -347,9 +347,9 @@ class ListUpdate(AutoName):
 
 
 class FavouritesSort(AutoName):
-    """How Manage Favourites shows the favourites, each folder's own sorted
-    so, folders and videos together; their own order, the one they are
-    kept and the menu shows them in, left as it is."""
+    """How the favourites are shown, in the menu and in Manage Favourites,
+    each folder's own sorted so, folders and videos together; their own
+    order, the one they are kept in, left as it is."""
 
     OWN = auto()
     NAME = auto()

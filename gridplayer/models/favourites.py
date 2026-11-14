@@ -8,11 +8,16 @@ and where in it it was, which it is opened with and at again; and, a
 favourite or a folder, when it was added, for Manage Favourites to sort by.
 """
 
+from collections.abc import Callable
 from datetime import datetime
+from math import inf
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, TypeVar
 
 from pydantic import BaseModel, Field, RootModel
+
+from gridplayer.params.static import FavouritesSort
+from gridplayer.utils.next_file import natural_key
 
 # an A-B loop as a video keeps it (models.video.LoopSpan, not imported: the
 # settings are made of these, and the video model is made of the settings)
@@ -230,3 +235,61 @@ def folders_within(items: list[FavouriteItem]) -> list[list[FavouriteVideo]]:
         found.extend(folders_within(item.items))
 
     return found
+
+
+T = TypeVar("T")
+
+
+def sorted_by(
+    entries: list[T],
+    sort: FavouritesSort,
+    name_of: Callable[[T], str],
+    added_of: Callable[[T], datetime | None],
+) -> list[T]:
+    """A folder's, given in their own order, sorted so, folders and videos
+    together: by name as a person would, or by when added, one added before
+    favourites kept it as the oldest and those added at the same time in
+    their own order, which a reversed sort keeps too."""
+
+    entries = list(entries)
+
+    if sort in {FavouritesSort.NAME, FavouritesSort.NAME_DESC}:
+        entries.sort(
+            key=lambda entry: natural_key(name_of(entry).strip()),
+            reverse=sort == FavouritesSort.NAME_DESC,
+        )
+    elif sort in {FavouritesSort.ADDED, FavouritesSort.ADDED_DESC}:
+        entries.sort(
+            key=lambda entry: _added_key(added_of(entry)),
+            reverse=sort == FavouritesSort.ADDED_DESC,
+        )
+
+    return entries
+
+
+def _added_key(added: datetime | None) -> float:
+    return -inf if added is None else added.timestamp()
+
+
+def in_sort(
+    items: list[FavouriteItem], sort: FavouritesSort
+) -> list[tuple[int, FavouriteItem]]:
+    """A folder's items as shown, each with where it is kept."""
+
+    return sorted_by(
+        list(enumerate(items)),
+        sort,
+        name_of=lambda entry: entry[1].name,
+        added_of=lambda entry: entry[1].added,
+    )
+
+
+def sorted_deep(items: list[FavouriteItem], sort: FavouritesSort) -> list:
+    """A folder's items as shown, and those of each folder within too."""
+
+    return [
+        item.model_copy(update={"items": sorted_deep(item.items, sort)})
+        if isinstance(item, FavouriteFolder)
+        else item
+        for _, item in in_sort(items, sort)
+    ]

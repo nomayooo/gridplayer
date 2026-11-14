@@ -31,6 +31,7 @@ from gridplayer.params.static import FavouritesSort
 from gridplayer.player.managers import favourites as manager_module
 from gridplayer.player.managers.add_videos import AddVideosManager
 from gridplayer.player.managers.favourites import FavouritesManager
+from gridplayer.settings import _default_settings
 
 HERE = Path(__file__).resolve()
 # a file none of the favourites are of
@@ -214,7 +215,7 @@ class TestTheModel:
 def stored(monkeypatch):
     """The settings the favourites are kept in, a dict of their own."""
 
-    values = {"favourites": _favourites()}
+    values = {"favourites": _favourites(), "favourites/sort": FavouritesSort.OWN}
 
     monkeypatch.setattr(
         manager_module,
@@ -281,6 +282,61 @@ class TestTheMenu:
 
     def test_a_folder_gone_since_is_empty(self, stored):
         assert _manager().menu_generator_favourites_folder((7,)) == []
+
+    def test_in_the_sort_picked_each_folder_its_own(self, stored):
+        stored["favourites"] = _sortable()
+        stored["favourites/sort"] = FavouritesSort.NAME
+
+        menu = _manager().menu_generator_favourites()
+
+        assert [item["title"] for item in menu] == ["Apple", "b", "c", "Zed"]
+        # a folder still known by where it is kept
+        assert menu[3]["menu_generator"] == ("menu_generator_favourites_folder", (1,))
+        folder = _manager().menu_generator_favourites_folder((1,))
+        assert [i if i == "---" else i["title"] for i in folder][:2] == [
+            "First",
+            "Second",
+        ]
+
+    def test_newest_first_one_undated_last(self, stored):
+        stored["favourites"] = _sortable()
+        stored["favourites/sort"] = FavouritesSort.ADDED_DESC
+
+        menu = _manager().menu_generator_favourites()
+
+        assert [item["title"] for item in menu] == ["Apple", "b", "Zed", "c"]
+
+    def test_open_all_opens_them_in_the_order_shown(self, stored, tmp_path):
+        files = [tmp_path / f"{name}.mp4" for name in ("old", "new", "deep")]
+        for file in files:
+            file.write_bytes(b"video")
+        old, new, deep = (
+            FavouriteVideo(name=f.stem, path=f, added=_at(day))
+            for f, day in zip(files, (1, 9, 5), strict=True)
+        )
+        stored["favourites"] = Favourites(
+            [
+                FavouriteFolder(
+                    name="F",
+                    items=[
+                        old,
+                        new,
+                        FavouriteFolder(name="Sub", items=[deep]),
+                    ],
+                )
+            ]
+        )
+        stored["favourites/sort"] = FavouritesSort.ADDED_DESC
+        manager = _manager()
+
+        manager.cmd_open_favourites_folder((0,))
+
+        ((here,), _) = manager._ctx.commands.add_favourite_videos.call_args
+        assert [v.name for v in here] == ["new", "old"]
+
+
+def test_newest_first_unless_another_sort_is_picked():
+    assert _default_settings["favourites/sort"] == FavouritesSort.ADDED_DESC
 
 
 class TestOpening:
@@ -1849,3 +1905,59 @@ class TestSortingTheManageWindow:
         dialog._open([_tree_item(dialog, 3)])
 
         assert opened == [["First", "Second"]]
+
+
+class TestAddedAtOnce:
+    """What is added in one go is added at one time, each of it: sorted by
+    it, kept in its own order, as the grid had them."""
+
+    @pytest.fixture
+    def ticking(self, monkeypatch):
+        """A clock a day on each time it is read."""
+
+        days = iter(range(1, 28))
+        monkeypatch.setattr(manager_module, "added_now", lambda: _at(next(days)))
+
+    def test_add_all(self, stored, monkeypatch, ticking):
+        stored["favourites"] = Favourites([FavouriteFolder(name="Grid")])
+        asked = Mock(return_value=(stored["favourites"], (0,)))
+        monkeypatch.setattr(manager_module.AddAllFavouritesDialog, "ask", asked)
+
+        _grid_of(_block(uri=NEW), _block(uri=HERE)).cmd_add_all_to_favourites()
+
+        assert [v.added for v in stored["favourites"].items_at((0,))] == [_at(1)] * 2
+
+    def test_a_session_its_windows_and_their_videos(self, stored, ticking):
+        windows = [
+            [_video("a", path=NEW), _video("b")],
+            [_video("c").model_copy(update={"added": _at(20)})],
+        ]
+
+        _manager().save_session_favourites("Session", windows)
+
+        session = stored["favourites"].root[-1]
+        dates = {session.added} | {
+            item.added for folder in session.items for item in [folder, *folder.items]
+        }
+        assert dates == {_at(1)}
+
+    def test_the_files_of_a_window_sent_for_a_session(self, stored, ticking):
+        manager = _grid_of(_block(title="One"), _block(uri=HERE, title="Two"))
+
+        assert {v.added for v in manager.session_favourites()} == {_at(1)}
+
+    def test_an_import_its_folders_and_videos(
+        self, importing, stored, tmp_path, ticking
+    ):
+        from gridplayer.models.video import Video
+
+        importing.picked = [
+            _playlist(tmp_path / "One.gpls", Video(uri=HERE), Video(uri=NEW)),
+            _playlist(tmp_path / "Two.gpls", Video(uri=HERE)),
+        ]
+
+        importing.manager.cmd_import_playlists()
+
+        root = stored["favourites"].root
+        dates = {item.added for folder in root[1:] for item in [folder, *folder.items]}
+        assert dates == {_at(1)}

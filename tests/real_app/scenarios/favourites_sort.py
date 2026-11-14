@@ -1,5 +1,6 @@
 """Manage Favourites sorted by name and by when each was added, folders and
-videos together, each folder's own: one added in the player dated as it is
+videos together, each folder's own, newest first unless another is picked,
+and the Favourites menu in the same order: one added in the player dated as it is
 added, one renamed in its place while sorted by name moved to its new name,
 the sort kept for the next time, and their own order kept all the same.
 """
@@ -30,6 +31,10 @@ def scenario(d):
                 {"kind": "video", "name": "Apple", "path": str(b_clip), "added": at(8)},
             ]
         ),
+    )
+    d.check(
+        "newest first by default",
+        Settings().get("favourites/sort") == FavouritesSort.ADDED_DESC,
     )
     Settings().set("favourites/sort", FavouritesSort.OWN)
 
@@ -93,6 +98,11 @@ def scenario(d):
         [f.name for f in kept],
     )
     d.check("the sort kept", Settings().get("favourites/sort") == FavouritesSort.NAME)
+
+    def in_menu():
+        return [i["title"] for i in d.ctx.commands.menu_generator_favourites()]
+
+    d.check("the menu so too", in_menu() == ["b", "c", "Zed", "zz Apple"], in_menu())
 
     def sorted_again(window):
         d.check("sorted so again", shown(window) == ["b", "c", "Zed", "zz Apple"])

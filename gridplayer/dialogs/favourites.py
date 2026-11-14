@@ -2,8 +2,6 @@
 video a favourite, in a folder of the viewer's picking, and one to put them
 in order, in folders made, renamed, moved about and removed."""
 
-from math import inf
-
 from PyQt5.QtCore import (
     QDateTime,
     QItemSelectionModel,
@@ -40,11 +38,11 @@ from gridplayer.models.favourites import (
     FolderPath,
     added_now,
     folders_within,
+    sorted_by,
     videos_in,
 )
 from gridplayer.params.static import FavouritesSort
 from gridplayer.settings import Settings
-from gridplayer.utils.next_file import natural_key
 from gridplayer.utils.qt import count_txt, translate
 from gridplayer.utils.time_txt import ms_time_txt
 
@@ -78,10 +76,6 @@ def _added_txt(added) -> str:
 def _added_of(tree_item):
     video = tree_item.data(0, ITEM_FAVOURITE)
     return tree_item.data(0, ITEM_ADDED) if video is None else video.added
-
-
-def _added_key(added) -> float:
-    return -inf if added is None else added.timestamp()
 
 
 def _all_within(parent_item) -> list:
@@ -441,9 +435,9 @@ class ManageFavouritesDialog(QDialog):
     own videos here, those of each folder it holds in a new window each.
 
     Shown in their own order, or sorted by name or by when they were added,
-    each folder's own, the sort kept for the next time; their own order is
-    the one kept on OK all the same, and the menu's. Dragged about only in
-    it: sorted, there is no place to drop one in."""
+    each folder's own, the sort kept for the next time and the menu's too;
+    their own order is the one kept on OK all the same. Dragged about only
+    in it: sorted, there is no place to drop one in."""
 
     # the videos to open here, and the lists of them for new windows
     open_requested = pyqtSignal(list, list)
@@ -739,19 +733,12 @@ class ManageFavouritesDialog(QDialog):
         shown = [parent_item.child(i) for i in range(parent_item.childCount())]
         children = sorted(shown, key=lambda child: child.data(0, ITEM_ORDER))
 
-        if self.sort in {FavouritesSort.NAME, FavouritesSort.NAME_DESC}:
-            children.sort(
-                key=lambda child: natural_key(child.text(0).strip()),
-                reverse=self.sort == FavouritesSort.NAME_DESC,
-            )
-        elif self.sort in {FavouritesSort.ADDED, FavouritesSort.ADDED_DESC}:
-            # one added before favourites kept it as the oldest; one added at
-            # the same time as another kept in their own order, which a
-            # reversed sort keeps too
-            children.sort(
-                key=lambda child: _added_key(_added_of(child)),
-                reverse=self.sort == FavouritesSort.ADDED_DESC,
-            )
+        children = sorted_by(
+            children,
+            self.sort,
+            name_of=lambda child: child.text(0),
+            added_of=_added_of,
+        )
 
         if children == shown:
             return
