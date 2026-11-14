@@ -14,6 +14,7 @@ from gridplayer.models.recent_list import (
     RecentListPlaylists,
     RecentListVideos,
 )
+from gridplayer.models.remembered_loops import RememberedLoops
 from gridplayer.models.resolver_patterns import ResolverPatterns
 from gridplayer.params import env
 from gridplayer.params.gestures import (
@@ -239,6 +240,9 @@ _default_settings = {
     "favourites": Favourites(),
     # how the menu and Manage Favourites show them, not how they are kept
     "favourites/sort": FavouritesSort.ADDED_DESC,
+    # the A-B loops last left on each file, put back when it is opened again,
+    # see models.remembered_loops
+    "loops/remembered": RememberedLoops(),
     # the playlist file open when the player was last closed, empty for none
     "last_playlist": "",
 }

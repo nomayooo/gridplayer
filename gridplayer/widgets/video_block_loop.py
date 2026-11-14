@@ -20,9 +20,18 @@ next or the one before on the bar, the begun one's too, and round again.
 
 Where a loop ends up taking the video is the block's (see loop_start,
 loop_end and time_changed); here is only how the viewer sets them.
+
+Whatever the viewer makes of them is remembered for the file (see
+models.remembered_loops), and a cell opening a file with no loops of its
+own, as one opened afresh or gone on to from the one before, takes those
+up again. A favourite and a playlist saved with its loops come with their
+own.
 """
 
+from gridplayer.models.remembered_loops import FileLoops
 from gridplayer.models.video import LoopSpan
+from gridplayer.settings import Settings
+from gridplayer.utils.bookmarks import file_key
 from gridplayer.widgets.video_block_guards import VideoBlockPart, only_seekable
 
 # a marker the video is at, or just past, is the one it is at: the next is
@@ -64,6 +73,7 @@ class LoopControl(VideoBlockPart):
         self._params.loop_start = new_time
 
         self.announce()
+        self.remember()
 
     @only_seekable
     def set_end(self):
@@ -107,15 +117,20 @@ class LoopControl(VideoBlockPart):
         self._params.is_outside_loops = False
 
         self.announce()
+        self.remember()
 
     # taking them away
 
     @only_seekable
     def reset(self):
+        """No loops, as the viewer asks: forgotten for the file too."""
+
         self.clear()
+        self.remember()
 
     def clear(self):
-        """No loops, finished or begun: the whole video plays."""
+        """No loops, finished or begun: the whole video plays. The file's
+        are remembered as they were, for a video stopped or gone on from."""
 
         self._params.loops = []
         self._params.loop_index = 0
@@ -140,6 +155,7 @@ class LoopControl(VideoBlockPart):
             return
 
         self.announce()
+        self.remember()
 
     @only_seekable
     def undo_marker(self):
@@ -161,6 +177,7 @@ class LoopControl(VideoBlockPart):
             return
 
         self.announce()
+        self.remember()
 
     # going from one to another
 
@@ -262,6 +279,44 @@ class LoopControl(VideoBlockPart):
             end = self._length()
 
         return start <= time_ms <= end
+
+    # remembering them
+
+    def remember(self):
+        """The file's loops as the cell has them now, for when it is opened
+        again; none forgets it."""
+
+        params = self._params
+
+        if params is None:
+            return
+
+        settings = Settings()
+        remembered = settings.get("loops/remembered")
+        remembered.put(
+            file_key(params.uri),
+            FileLoops(loops=list(params.loops), loop_start=params.loop_start),
+        )
+        settings.set("loops/remembered", remembered)
+
+    def recall(self):
+        """The loops last left on the file, for a cell with none of its own:
+        played from the first of them."""
+
+        params = self._params
+
+        if params is None or params.loops or params.loop_start is not None:
+            return
+
+        entry = Settings().get("loops/remembered").get(file_key(params.uri))
+
+        if not entry:
+            return
+
+        params.loops = list(entry.loops)
+        params.loop_index = 0
+        params.loop_start = entry.loop_start
+        params.is_outside_loops = False
 
     # showing them
 

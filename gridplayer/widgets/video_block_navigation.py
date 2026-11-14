@@ -616,7 +616,9 @@ class NavigationControl(VideoBlockPart):
 
         self.cancel_steps()
 
-        self._block.loop.reset()
+        # left behind, not taken away: the file keeps them for when it is
+        # opened again, and the next one comes with its own (see loop.recall)
+        self._block.loop.clear()
         self._block.video_params.current_position = 0
         self._forget_files_of_previous_video()
         # its bookmarks, if it has any, come with the file: see bookmarks

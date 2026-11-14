@@ -1883,6 +1883,9 @@ class VideoBlock(QWidget):
             self.navigation.go_on_from_gone_file()
             return
 
+        # the loops last left on the file, for a cell come to it with none
+        self.loop.recall()
+
         self._sync_cell_background()
         self._ensure_video_driver()
 
