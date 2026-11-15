@@ -3,8 +3,8 @@ one it picks out, a row clicked and the wheel turned over it, and when it is
 there at all."""
 
 import pytest
-from PyQt5.QtCore import QPoint, QPointF, Qt
-from PyQt5.QtGui import QFontMetrics, QWheelEvent
+from PyQt5.QtCore import QEvent, QPoint, QPointF, Qt
+from PyQt5.QtGui import QFontMetrics, QMouseEvent, QWheelEvent
 from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication
 
@@ -316,3 +316,76 @@ class TestItsButton:
         assert widgets.index(overlay.bookmark_list_button) == (
             widgets.index(overlay.label_progress) + 1
         )
+
+
+def _delete_point(shown, row):
+    top = shown._rows_top() + shown._row_height() * row
+    return shown._delete_rect(top).center().toPoint()
+
+
+class TestDeletingOne:
+    def test_the_cross_on_the_row_under_the_mouse(self, shown):
+        # sent as it is: QTest.mouseMove moves nothing with no button held
+        QApplication.sendEvent(
+            shown,
+            QMouseEvent(
+                QEvent.MouseMove,
+                QPointF(_row_point(shown, 1)),
+                Qt.NoButton,
+                Qt.NoButton,
+                Qt.NoModifier,
+            ),
+        )
+
+        assert shown._hovered == 1
+        assert shown.is_delete_at(_delete_point(shown, 1))
+        assert not shown.is_delete_at(_row_point(shown, 1))
+
+    def test_clicked_says_which_to_delete_not_where_to_go(self, shown):
+        deleted, gone_to = [], []
+        shown.bookmark_remove_clicked.connect(deleted.append)
+        shown.bookmark_clicked.connect(gone_to.append)
+
+        QTest.mouseClick(shown, Qt.LeftButton, Qt.NoModifier, _delete_point(shown, 1))
+
+        assert (deleted, gone_to) == ([30000], [])
+
+    def test_the_rest_of_the_row_still_goes_there(self, shown):
+        deleted, gone_to = [], []
+        shown.bookmark_remove_clicked.connect(deleted.append)
+        shown.bookmark_clicked.connect(gone_to.append)
+
+        QTest.mouseClick(shown, Qt.LeftButton, Qt.NoModifier, _row_point(shown, 1))
+
+        assert (deleted, gone_to) == ([], [(30000,)])
+
+    def test_said_on_by_the_overlay(self, shown, overlay):
+        deleted = []
+        overlay.bookmark_remove_clicked.connect(deleted.append)
+
+        QTest.mouseClick(shown, Qt.LeftButton, Qt.NoModifier, _delete_point(shown, 0))
+
+        assert deleted == [10000]
+
+
+def test_each_name_shown_whole_where_there_is_room(overlay):
+    """Not cut short at the width it was given for itself."""
+
+    overlay.set_seek_marks(
+        tuple(_bookmark(1000 * i, f"Bookmark {i}") for i in range(1, 4))
+    )
+    overlay.lay_out_now()
+
+    shown = overlay.bookmark_list
+    font = shown.font()
+    font.setBold(True)
+    metrics = QFontMetrics(font)
+
+    time_width = max(
+        metrics.horizontalAdvance(shown._time_txt(t)) for t, *_ in shown.rows
+    )
+    name_width = shown.width() - (6 + 6 + 6) - 6 * 2 - time_width - 6
+
+    # more than just its width: Qt cuts one given that alone short
+    longest = max(metrics.horizontalAdvance(name) for _, name, _ in shown.rows)
+    assert name_width > longest

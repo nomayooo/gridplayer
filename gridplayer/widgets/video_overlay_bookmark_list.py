@@ -5,11 +5,13 @@ overlay, and only while there are bookmarks.
 Kept out of the way: the title's lighter box, smaller than the rest, a few
 rows high at most, the rest of them a turn of the wheel away, no wider than
 a share of the cell, and not there at all in a cell too small to spare the
-room. The one the video is at, or last passed, is picked out.
+room. The one the video is at, or last passed, is picked out. The row under
+the mouse offers to delete its bookmark, a cross in place of its time,
+gone at once when it is clicked, without asking.
 """
 
 from PyQt5.QtCore import QPointF, QRectF, QSize, Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QFont, QFontMetrics, QPainter, QPolygonF
+from PyQt5.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen, QPolygonF
 
 from gridplayer.models.seek_mark import SeekMarkKind
 from gridplayer.utils.time_txt import get_time_txt
@@ -36,16 +38,25 @@ ARROW_SPACE = 8
 ARROW_SIZE = 4
 # a name never squeezed narrower than this, for a short one to be read
 MIN_NAME_WIDTH = 24
+# room past a name's own width: Qt elides one given just its width
+NAME_SLACK = 4
 SIDE_PADDING = 6
 DOT_SIZE = 6
 GAP = 6
 # the time, quieter than the name
 TIME_ALPHA = 0.7
+# the cross deleting the bookmark of the row under the mouse: how big, and
+# how much of the row's height the square it is clicked in takes
+DELETE_CROSS = 7
+DELETE_PEN = 1.6
 
 
 class OverlayBookmarkList(OverlayWidget):
     # a bookmark picked, by its time, as a marker clicked on says it
     bookmark_clicked = pyqtSignal(tuple)
+
+    # a bookmark to delete, by its time
+    bookmark_remove_clicked = pyqtSignal(int)
 
     fill_alpha = TITLE_FILL_ALPHA
 
@@ -60,6 +71,7 @@ class OverlayBookmarkList(OverlayWidget):
         # the first row shown, scrolled down to
         self._first = 0
         self._hovered: int | None = None
+        self._is_over_delete = False
 
         font = QFont(self.font())
         font.setPointSizeF(font.pointSizeF() * FONT_SCALE)
@@ -164,7 +176,7 @@ class OverlayBookmarkList(OverlayWidget):
             SIDE_PADDING * 2
             + DOT_SIZE
             + GAP
-            + max(names, MIN_NAME_WIDTH)
+            + max(names + NAME_SLACK, MIN_NAME_WIDTH)
             + GAP * 2
             + times
         )
@@ -231,6 +243,10 @@ class OverlayBookmarkList(OverlayWidget):
                 name_txt,
             )
 
+            if index == self._hovered:
+                self._paint_delete(painter, top, text_color)
+                continue
+
             quiet = QColor(text_color)
             quiet.setAlphaF(TIME_ALPHA)
             painter.setPen(quiet)
@@ -241,6 +257,48 @@ class OverlayBookmarkList(OverlayWidget):
             )
 
         self._paint_more(painter)
+
+    def _delete_rect(self, top: float) -> QRectF:
+        """Where a row's cross is clicked: a square at its right end."""
+
+        side = self._row_height()
+        return QRectF(self.width() - SIDE_PADDING - side, top, side, side)
+
+    def _paint_delete(self, painter, top: float, color: QColor):
+        square = self._delete_rect(top)
+
+        if self._is_over_delete:
+            under = QColor(color)
+            under.setAlphaF(0.25)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(under)
+            painter.drawRoundedRect(square.adjusted(2, 2, -2, -2), 3, 3)
+
+        middle = square.center()
+        half = DELETE_CROSS / 2
+
+        painter.setPen(QPen(color, DELETE_PEN, Qt.SolidLine, Qt.RoundCap))
+        painter.drawLine(
+            QPointF(middle.x() - half, middle.y() - half),
+            QPointF(middle.x() + half, middle.y() + half),
+        )
+        painter.drawLine(
+            QPointF(middle.x() + half, middle.y() - half),
+            QPointF(middle.x() - half, middle.y() + half),
+        )
+
+    def is_delete_at(self, pos) -> bool:
+        """Whether a point is on the cross of the row it is in."""
+
+        index = self.row_at(pos.y())
+
+        if index is None:
+            return False
+
+        place = index - self._first
+        top = self._rows_top() + place * self._row_height()
+
+        return self._delete_rect(top).contains(QPointF(pos))
 
     def _paint_more(self, painter):
         """A small arrow above or below the rows, in a room of its own,
@@ -291,9 +349,11 @@ class OverlayBookmarkList(OverlayWidget):
 
     def mouseMoveEvent(self, event):
         hovered = self.row_at(event.pos().y())
+        is_over_delete = self.is_delete_at(event.pos())
 
-        if hovered != self._hovered:
+        if hovered != self._hovered or is_over_delete != self._is_over_delete:
             self._hovered = hovered
+            self._is_over_delete = is_over_delete
             self.update()
 
         event.accept()
@@ -301,6 +361,7 @@ class OverlayBookmarkList(OverlayWidget):
     def leaveEvent(self, event):
         if self._hovered is not None:
             self._hovered = None
+            self._is_over_delete = False
             self.update()
 
         super().leaveEvent(event)
@@ -317,8 +378,17 @@ class OverlayBookmarkList(OverlayWidget):
 
         index = self.row_at(event.pos().y())
 
-        if index is not None:
-            self.bookmark_clicked.emit((self._rows[index][0],))
+        if index is None:
+            return
+
+        time_ms = self._rows[index][0]
+
+        if self.is_delete_at(event.pos()):
+            self._hovered = None
+            self._is_over_delete = False
+            self.bookmark_remove_clicked.emit(time_ms)
+        else:
+            self.bookmark_clicked.emit((time_ms,))
 
     def mouseDoubleClickEvent(self, event):
         # not the cell's, which a double click makes the only one shown

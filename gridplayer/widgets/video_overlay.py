@@ -116,6 +116,9 @@ class OverlayBlock(QWidget):
     # a bookmark's marker clicked, by the bookmark's time
     bookmark_clicked = pyqtSignal(tuple)
 
+    # a bookmark to delete, by its time: its row's cross in the list
+    bookmark_remove_clicked = pyqtSignal(int)
+
     # a marker's menu asked for: where, and the times of its bookmarks
     bookmark_menu_requested = pyqtSignal(QPoint, tuple)
 
@@ -198,6 +201,7 @@ class OverlayBlock(QWidget):
             (self.bookmark_markers.marker_left, self.floating_progress.on_mouse_left),
             (self.bookmark_markers.marker_clicked, self.bookmark_clicked),
             (self.bookmark_list.bookmark_clicked, self.bookmark_clicked),
+            (self.bookmark_list.bookmark_remove_clicked, self.bookmark_remove_clicked),
             (self.bookmark_list_button.clicked, self.bookmark_list_toggle_clicked),
             (
                 self.bookmark_markers.marker_menu_requested,

@@ -1260,3 +1260,73 @@ class TestTheRenameBox:
             )
             is None
         )
+
+
+class TestTakingTheLastBack:
+    """Remove Last Bookmark: the last added here, of those still there, one
+    after another back to the first; none added here, none taken."""
+
+    def _add_at(self, block, *times):
+        for time_ms in times:
+            block.seek(time_ms)
+            block.bookmarker.add()
+
+    def test_the_last_added_not_the_last_on_the_bar(self, make_block):
+        block = make_block(bookmarks=())
+        self._add_at(block, 30000, 5000)
+
+        block.bookmarker.remove_last_added()
+
+        assert _times(block) == [30000]
+
+    def test_one_after_another_back_to_the_first(self, make_block):
+        block = make_block(bookmarks=())
+        self._add_at(block, 30000, 5000, 20000)
+
+        block.bookmarker.remove_last_added()
+        assert _times(block) == [5000, 30000]
+
+        block.bookmarker.remove_last_added()
+        assert _times(block) == [30000]
+
+        block.bookmarker.remove_last_added()
+        assert _times(block) == []
+
+    def test_one_removed_meanwhile_passed_over(self, make_block):
+        block = make_block(bookmarks=())
+        self._add_at(block, 10000, 20000)
+        block.bookmarker.remove_at_time(20000)
+
+        block.bookmarker.remove_last_added()
+
+        assert _times(block) == []
+
+    def test_those_not_added_here_left_and_said_so(self, block):
+        before = _times(block)
+
+        block.bookmarker.remove_last_added()
+
+        assert _times(block) == before
+        assert block.notices[-1] == "No bookmark added to take back"
+
+
+class TestDeletedFromTheList:
+    def test_the_one_at_its_time_gone_without_asking(self, block, mocker):
+        asked = mocker.patch("gridplayer.dialogs.messagebox.QCustomMessageBox.question")
+
+        block.bookmarker.remove_at_time(10000)
+
+        assert _times(block) == [30000]
+        asked.assert_not_called()
+
+    def test_none_at_its_time_none_gone(self, block):
+        before = _times(block)
+
+        block.bookmarker.remove_at_time(12345)
+
+        assert _times(block) == before
+
+    def test_the_lists_cross_deletes_it(self, block):
+        block.overlay.bookmark_remove_clicked.emit(30000)
+
+        assert _times(block) == [10000]

@@ -344,6 +344,7 @@ SECTIONS = MappingProxyType(
             (
                 "Bookmarks",
                 "Add Bookmark",
+                "Remove Last Bookmark",
                 "Previous Bookmark",
                 "Next Bookmark",
                 "Manage Bookmarks",
