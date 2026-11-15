@@ -246,6 +246,7 @@ class PlaylistManager(ManagerBase):
         dialog = QFileDialog(
             parent=self.parent(),
             caption=translate("Dialog - Open Playlist", "Open Playlist", "Header"),
+            directory=_last_playlist_dir(),
         )
         dialog.setFileMode(QFileDialog.ExistingFile)
 
@@ -261,6 +262,7 @@ class PlaylistManager(ManagerBase):
             files = dialog.selectedFiles()
 
             if files:
+                Settings().set("player/last_playlist_dir", str(Path(files[0]).parent))
                 self.load_playlist_file(Path(files[0]))
 
     def cmd_close_playlist(self) -> bool:
@@ -756,3 +758,13 @@ def _is_same_list(one, other) -> bool:
     return one.model_copy(update={"read_at": None}) == other.model_copy(
         update={"read_at": None}
     )
+
+
+def _last_playlist_dir() -> str:
+    """Where a playlist was last opened from, for Open Playlist to open in,
+    in this window or another, the next time the player starts too; empty,
+    for the dialog's own, where that is gone or there is none."""
+
+    folder = Settings().get("player/last_playlist_dir")
+
+    return folder if folder and Path(folder).is_dir() else ""
