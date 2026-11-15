@@ -20,12 +20,14 @@ from PyQt5.QtWidgets import (
 )
 
 from gridplayer.params import env
-from gridplayer.params.static import OVERLAY_ACTIVITY_EVENT
+from gridplayer.params.static import OVERLAY_ACTIVITY_EVENT, BookmarkListPosition
 from gridplayer.utils.compositor_linux import should_make_overlay_opaque
 from gridplayer.utils.drop_zone import DropIndicator
 from gridplayer.utils.qt import MILLISECONDS, qt_connect, translate
 from gridplayer.utils.time_txt import get_time_txt
+from gridplayer.widgets.video_overlay_bookmark_list import OverlayBookmarkList
 from gridplayer.widgets.video_overlay_buttons import (
+    OverlayBookmarkListButton,
     OverlayButton,
     OverlayExitButton,
     OverlayListPlaceButton,
@@ -117,6 +119,9 @@ class OverlayBlock(QWidget):
     # a marker's menu asked for: where, and the times of its bookmarks
     bookmark_menu_requested = pyqtSignal(QPoint, tuple)
 
+    # the bookmarks' list shown or hidden, by its button
+    bookmark_list_toggle_clicked = pyqtSignal()
+
     # which item of its list the cell plays clicked, for the List window
     list_place_clicked = pyqtSignal()
 
@@ -140,6 +145,8 @@ class OverlayBlock(QWidget):
         self._is_on_chrome = False
         self._last_position = (0, 0)
         self._volume_button_wanted = True
+        self._bookmark_list_position = BookmarkListPosition.TOP_LEFT
+        self._is_bookmark_list_shown = True
 
         # what a failed cell offers past trying again; its Next goes back
         # where its list is played back to front
@@ -190,6 +197,8 @@ class OverlayBlock(QWidget):
             (self.bookmark_markers.marker_over, self.floating_progress.on_marker_over),
             (self.bookmark_markers.marker_left, self.floating_progress.on_mouse_left),
             (self.bookmark_markers.marker_clicked, self.bookmark_clicked),
+            (self.bookmark_list.bookmark_clicked, self.bookmark_clicked),
+            (self.bookmark_list_button.clicked, self.bookmark_list_toggle_clicked),
             (
                 self.bookmark_markers.marker_menu_requested,
                 self.bookmark_menu_requested,
@@ -276,7 +285,18 @@ class OverlayBlock(QWidget):
 
         self.right_bar = QVBoxLayout()
 
+        # the bookmarks, to pick one to go to: in a corner, under the title
+        # or above the bar, on the left or the right of the volume's bar
+        self.bookmark_list = OverlayBookmarkList(parent=self)
+        self.left_bar = QVBoxLayout()
+        self.left_bar.addStretch()
+        self.right_list_bar = QVBoxLayout()
+        self.right_list_bar.addStretch()
+        self._place_bookmark_list()
+
+        self.middle.addLayout(self.left_bar)
         self.middle.addStretch()
+        self.middle.addLayout(self.right_list_bar)
         self.middle.addLayout(self.right_bar)
 
         self.volume_bar = OverlayVolumeBar(parent=self)
@@ -289,6 +309,10 @@ class OverlayBlock(QWidget):
         self.progress_bar = OverlayProgressBar(parent=self)
         self.progress_bar_placeholder = QWidget(parent=self)
         self.volume_button = OverlayVolumeButton(parent=self)
+        self.bookmark_list_button = OverlayBookmarkListButton(parent=self)
+        self.bookmark_list_button.setToolTip(
+            translate("Bookmark List", "Show Bookmark List")
+        )
 
         self.play_button = OverlayTextButton(
             text=translate("Overlay", "Play"), sign=draw_play, parent=self
@@ -312,6 +336,7 @@ class OverlayBlock(QWidget):
         self.bottom_bar.addWidget(self.retry_button)
         self.bottom_bar.addWidget(self.details_button)
         self.bottom_bar.addWidget(self.label_progress)
+        self.bottom_bar.addWidget(self.bookmark_list_button)
         self.bottom_bar.addWidget(self.progress_bar, 1)
         self.bottom_bar.addWidget(self.progress_bar_placeholder, 1)
         self.bottom_bar.addWidget(self.next_button)
@@ -332,6 +357,7 @@ class OverlayBlock(QWidget):
 
     def resizeEvent(self, event):
         self._sync_progress_label()
+        self._sync_bookmark_list()
 
     def paintEvent(self, event):
         self._paint_shadows(event.rect())
@@ -411,6 +437,8 @@ class OverlayBlock(QWidget):
         _, last_length = self._last_position
         self._last_position = (position, length)
 
+        self.bookmark_list.set_time(position, length)
+
         # the bar is there or not by whether there is a length: told the
         # time several times a second, laid out again only as that changes
         if (length > 0) != (last_length > 0):
@@ -460,6 +488,8 @@ class OverlayBlock(QWidget):
         self.progress_bar.marks = marks
         self.floating_progress.marks = marks
         self.bookmark_markers.set_marks(marks)
+        self.bookmark_list.set_marks(marks)
+        self._sync_bookmark_list()
 
     @pyqtSlot(str)
     def set_label(self, label):
@@ -631,6 +661,74 @@ class OverlayBlock(QWidget):
 
         self._sync_volume_chrome()
         self._sync_progress_label()
+        self._sync_bookmark_list()
+
+    def set_bookmark_list_position(self, position: BookmarkListPosition):
+        if position is self._bookmark_list_position:
+            return
+
+        self._bookmark_list_position = position
+        self._place_bookmark_list()
+        self._sync_bookmark_list()
+
+    @property
+    def bookmark_list_position(self) -> BookmarkListPosition:
+        return self._bookmark_list_position
+
+    def _place_bookmark_list(self):
+        """Into the corner it goes in: the side's column, at its top or its
+        bottom, the stretch the rest of it."""
+
+        position = self._bookmark_list_position
+        bookmark_list = self.bookmark_list
+
+        for bar in (self.left_bar, self.right_list_bar):
+            bar.removeWidget(bookmark_list)
+
+        is_left = position in {
+            BookmarkListPosition.TOP_LEFT,
+            BookmarkListPosition.BOTTOM_LEFT,
+        }
+        is_top = position in {
+            BookmarkListPosition.TOP_LEFT,
+            BookmarkListPosition.TOP_RIGHT,
+        }
+
+        bar = self.left_bar if is_left else self.right_list_bar
+        alignment = Qt.AlignLeft if is_left else Qt.AlignRight
+
+        if is_top:
+            bar.insertWidget(0, bookmark_list, 0, alignment)
+        else:
+            bar.addWidget(bookmark_list, 0, alignment)
+
+    def set_bookmark_list_shown(self, is_shown: bool):
+        self._is_bookmark_list_shown = is_shown
+        self._sync_bookmark_list()
+
+    @property
+    def is_bookmark_list_shown(self) -> bool:
+        return self._is_bookmark_list_shown
+
+    def _sync_bookmark_list(self):
+        """Its button up while there are bookmarks to pick from in a video,
+        and room in the cell to spare for them; the list too, while it is
+        to be shown."""
+
+        bookmark_list = self.bookmark_list
+        width, height = self.width(), self.height()
+
+        is_offered = (
+            self._mode is OverlayMode.VIDEO
+            and bookmark_list.has_rows
+            and bookmark_list.has_room(width, height)
+        )
+
+        self.bookmark_list_button.setVisible(is_offered)
+        self.bookmark_list_button.is_off = not self._is_bookmark_list_shown
+
+        bookmark_list.setMaximumWidth(bookmark_list.max_width_in(width))
+        bookmark_list.setVisible(is_offered and self._is_bookmark_list_shown)
 
     def _sync_progress_label(self):
         if self._mode is not OverlayMode.VIDEO:
@@ -694,6 +792,9 @@ class OverlayBlock(QWidget):
 
         if isinstance(widget, OverlayBookmarkMarkers):
             return widget.is_marker_at(widget.mapFrom(self, pos).x())
+
+        if isinstance(widget, OverlayBookmarkList):
+            return True
 
         return isinstance(widget, (OverlayButton, OverlayBar))
 

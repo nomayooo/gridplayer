@@ -207,6 +207,8 @@ PAGES = (
                 "player/inhibit_screensaver",
                 "player/media_keys_background",
                 "player/seek_preview",
+                "player/show_bookmark_list",
+                Indented("player/bookmark_list_position"),
             ),
             Section(
                 tray_text(

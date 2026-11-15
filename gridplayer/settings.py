@@ -28,6 +28,7 @@ from gridplayer.params.static import (
     AddMode,
     AudioChannelMode,
     AudioTrackMode,
+    BookmarkListPosition,
     CacheMode,
     ColorScheme,
     DropAction,
@@ -70,6 +71,10 @@ _default_settings = {
     "player/video_init_timeout": 120,
     "player/inhibit_screensaver": True,
     "player/seek_preview": True,
+    # a video's bookmarks listed over it, to pick one from, and where;
+    # the same for every playlist
+    "player/show_bookmark_list": True,
+    "player/bookmark_list_position": BookmarkListPosition.TOP_LEFT,
     "player/media_keys_background": True,
     "player/one_instance": True,
     "player/stay_on_top": False,

@@ -90,6 +90,20 @@ GENERAL_FIELDS: tuple[SettingField, ...] = (
         ),
     ),
     CheckboxField(
+        settings_key="player/show_bookmark_list",
+        label=translate("Bookmark List", "Show Bookmark List"),
+        tooltip=translate(
+            "Bookmark List",
+            "List a video's bookmarks over it, to pick one to go to",
+        ),
+    ),
+    ComboField(
+        settings_key="player/bookmark_list_position",
+        label=translate("SettingsDialog", "Bookmark list position"),
+        choices=choices.bookmark_list_positions,
+        enabled_when=When("player/show_bookmark_list"),
+    ),
+    CheckboxField(
         settings_key="player/media_keys_background",
         label=translate("SettingsDialog", "Control playback with media keys globally"),
     ),

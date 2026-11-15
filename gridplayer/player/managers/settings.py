@@ -5,6 +5,7 @@ from gridplayer.dialogs.messagebox import QCustomMessageBox
 from gridplayer.dialogs.settings import SettingsDialog
 from gridplayer.params.settings_bindings import GRID_STATE_ATTR
 from gridplayer.params.sponsorblock import SPONSORBLOCK_SETTINGS
+from gridplayer.params.static import BookmarkListPosition
 from gridplayer.params.subtitle_style import SUBTITLE_STYLE_SETTINGS
 from gridplayer.params.theme import apply_theme
 from gridplayer.player.managers.base import ManagerBase
@@ -34,6 +35,8 @@ class SettingsManager(ManagerBase):
     set_show_overlay_border = pyqtSignal(bool)
     set_overlay_hide_on_timeout = pyqtSignal(bool)
     set_overlay_timeout = pyqtSignal(int)
+    set_show_bookmark_list = pyqtSignal(bool)
+    set_bookmark_list_position = pyqtSignal(BookmarkListPosition)
     set_subtitle_encoding = pyqtSignal(str)
     set_bookmarks_shared = pyqtSignal(bool)
     sponsorblock_changed = pyqtSignal()
@@ -84,6 +87,8 @@ class SettingsManager(ManagerBase):
             "playlist/show_overlay_border": self.set_show_overlay_border,
             "playlist/overlay_hide_on_timeout": self.set_overlay_hide_on_timeout,
             "playlist/overlay_timeout": self.set_overlay_timeout,
+            "player/show_bookmark_list": self.set_show_bookmark_list,
+            "player/bookmark_list_position": self.set_bookmark_list_position,
             "video_defaults/subtitle_encoding": self.set_subtitle_encoding,
             "playlist/bookmarks_shared": self.set_bookmarks_shared,
         }

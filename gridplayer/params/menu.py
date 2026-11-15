@@ -8,6 +8,10 @@ SUBMENUS = MappingProxyType(
         "Jump (to)": {"title": translate("Actions", "Jump (to)"), "icon": "jump-to"},
         "Chapters": {"title": translate("Actions", "Chapters"), "icon": "chapters"},
         "Bookmarks": {"title": translate("Actions", "Bookmarks"), "icon": "bookmarks"},
+        "Bookmark List Position": {
+            "title": translate("Actions", "List Position"),
+            "icon": "anchor",
+        },
         "Favourites": {
             "title": translate("Favourites", "Favourites"),
             "icon": "favourites",
@@ -343,6 +347,14 @@ SECTIONS = MappingProxyType(
                 "Previous Bookmark",
                 "Next Bookmark",
                 "Manage Bookmarks",
+                "Show Bookmark List",
+                (
+                    "Bookmark List Position",
+                    "Bookmark List Top Left",
+                    "Bookmark List Top Right",
+                    "Bookmark List Bottom Left",
+                    "Bookmark List Bottom Right",
+                ),
                 "---",
                 "Bookmark List",
             ),

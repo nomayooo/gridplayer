@@ -15,7 +15,11 @@ from gridplayer.models.video import (
     default_subtitle_selection,
 )
 from gridplayer.params.settings_bindings import VIDEO_PARAM_ATTRS
-from gridplayer.params.static import SeekSyncMode, UnsavedChangesMode, WindowState
+from gridplayer.params.static import (
+    SeekSyncMode,
+    UnsavedChangesMode,
+    WindowState,
+)
 from gridplayer.player.managers.base import ManagerBase
 from gridplayer.playlist_settings import (
     PlaylistSettings,

@@ -15,6 +15,8 @@ from PyQt5.QtWidgets import QWIDGETSIZE_MAX
 from gridplayer.utils.qt import QABC
 from gridplayer.widgets.video_overlay_elements import OverlayWidget
 from gridplayer.widgets.video_overlay_icons import (
+    draw_bookmark_off,
+    draw_bookmark_on,
     draw_cross,
     draw_list,
     draw_pause,
@@ -179,6 +181,17 @@ class OverlayVolumeButton(OverlayButton):
 
     def icon_off(self, rect, painter, color_fg, color_bg):
         return draw_volume_off(rect, painter, color_fg, color_bg)
+
+
+class OverlayBookmarkListButton(OverlayButton):
+    """Shows or hides the bookmarks' list: a ribbon, filled while it is
+    shown, its outline while it is not."""
+
+    def icon(self, rect, painter, color_fg, color_bg):
+        return draw_bookmark_on(rect, painter, color_fg, color_bg)
+
+    def icon_off(self, rect, painter, color_fg, color_bg):
+        return draw_bookmark_off(rect, painter, color_fg, color_bg)
 
 
 class OverlayTextButton(OverlayButton):

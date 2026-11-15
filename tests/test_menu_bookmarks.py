@@ -50,6 +50,14 @@ class TestWhereTheyAre:
             "Previous Bookmark",
             "Next Bookmark",
             "Manage Bookmarks",
+            "Show Bookmark List",
+            (
+                "Bookmark List Position",
+                "Bookmark List Top Left",
+                "Bookmark List Top Right",
+                "Bookmark List Bottom Left",
+                "Bookmark List Bottom Right",
+            ),
             "---",
             "Bookmark List",
         ]
@@ -79,6 +87,9 @@ class TestTheirKeys:
             ACTIONS["Next Bookmark"]["key"],
         ) == ("M", "Alt+,", "Alt+.")
 
+    def test_showing_the_list_on_shift_m_beside_adding(self):
+        assert ACTIONS["Show Bookmark List"]["key"] == "Shift+M"
+
     def test_no_other_action_has_them(self):
         taken = {}
         for name, action in ACTIONS.items():
@@ -87,7 +98,7 @@ class TestTheirKeys:
                 if key:
                     taken.setdefault(key, []).append(name)
 
-        for key in ("M", "Alt+,", "Alt+."):
+        for key in ("M", "Alt+,", "Alt+.", "Shift+M"):
             assert len(taken[key]) == 1, (key, taken[key])
 
     def test_the_rest_come_without(self):
