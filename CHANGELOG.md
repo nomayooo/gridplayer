@@ -32,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+- Open Playlist opens where a playlist was last opened from, in every window and after a restart ([#37](https://github.com/nomayooo/gridplayer/pull/37))
 - Save Session to favourites: the videos of every GridPlayer window open, as they are, into a folder named by the date and time, each window's in a numbered folder of its own ([#28](https://github.com/nomayooo/gridplayer/pull/28))
 - Add Undo Loop Marker (Ctrl+Z) to take back A-B loop markers one at a time, and Ctrl+Shift+Z for every video ([#27](https://github.com/nomayooo/gridplayer/pull/27))
 - Import playlists as favourites, each into a folder of its name inside the folder picked, one renamed as wished or several at once ([#24](https://github.com/nomayooo/gridplayer/pull/24))
