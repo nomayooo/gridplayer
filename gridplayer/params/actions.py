@@ -2908,6 +2908,14 @@ ACTIONS = MappingProxyType(
             "icon": "minimize",
             "func": "minimize",
         },
+        "Open Videos": {
+            "title": translate("Actions", "Open Videos…"),
+            "icon": "add-files",
+            "func": "add_videos",
+            # first in the menu while there is nothing to play; Add Files,
+            # the same, under Add the rest of the time
+            "show_if": NOT("is_videos"),
+        },
         "Add - Files": {
             "title": translate("Actions", "Add Files"),
             "key": "Ctrl+A",

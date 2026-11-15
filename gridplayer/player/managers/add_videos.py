@@ -452,21 +452,28 @@ class AddVideosManager(ManagerBase):
         dialog = QFileDialog(
             parent=self.parent(),
             caption=translate("Dialog - Add Files", "Add Files", "Header"),
+            directory=_last_open_dir(),
         )
         dialog.setFileMode(QFileDialog.ExistingFiles)
 
         dialog.setNameFilters(media_name_filters())
 
         if dialog.exec():
-            self.add_media(dialog.selectedFiles())
+            files = dialog.selectedFiles()
+            if files:
+                _remember_open_dir(Path(files[0]).parent)
+            self.add_media(files)
 
     def cmd_add_folder(self):
         folder = QFileDialog.getExistingDirectory(
             parent=self.parent(),
             caption=translate("Dialog - Add Folder", "Add Folder", "Header"),
+            directory=_last_open_dir(),
         )
 
         if folder:
+            # the one it is in, to pick another beside it the next time
+            _remember_open_dir(Path(folder).parent)
             self.add_media([folder])
 
     def cmd_add_urls(self):
@@ -1458,3 +1465,17 @@ def media_name_filters() -> list[str]:
         name_filers.append(f"{ext_type['name']} ({ext_list})")
 
     return name_filers
+
+
+def _last_open_dir() -> str:
+    """Where videos were last opened or added from, for the file dialogs to
+    open in, in this window or another, the next time the player starts
+    too; empty, for the dialog's own, where that is gone or there is none."""
+
+    folder = Settings().get("player/last_open_dir")
+
+    return folder if folder and Path(folder).is_dir() else ""
+
+
+def _remember_open_dir(folder: Path) -> None:
+    Settings().set("player/last_open_dir", str(folder))

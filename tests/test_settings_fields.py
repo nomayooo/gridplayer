@@ -45,6 +45,7 @@ INTERNAL_SETTINGS = {
     "favourites",
     "favourites/sort",
     "bookmarks/remembered",
+    "player/last_open_dir",
 }
 
 SHARED_PAGES = pytest.mark.parametrize(

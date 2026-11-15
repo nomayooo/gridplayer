@@ -248,6 +248,9 @@ _default_settings = {
     "favourites": Favourites(),
     # how the menu and Manage Favourites show them, not how they are kept
     "favourites/sort": FavouritesSort.ADDED_DESC,
+    # the folder videos were last opened or added from, for the file dialog
+    # to open in again; empty for none yet
+    "player/last_open_dir": "",
     # the playlist file open when the player was last closed, empty for none
     "last_playlist": "",
 }

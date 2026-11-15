@@ -682,6 +682,7 @@ SECTIONS = MappingProxyType(
             ),
         ],
         "playlist": [
+            "Open Videos",
             (
                 "Sync",
                 (
