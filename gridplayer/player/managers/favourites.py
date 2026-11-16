@@ -99,19 +99,42 @@ class FavouritesManager(ManagerBase):
         offered it."""
 
         favourites = self.favourites
-        offered_names = [names for _, names in offered.folders()]
+        offered_folders = dict(offered.folders())
+        asked_folders = dict(asked.folders())
+        # where each folder of the window is in the favourites as kept now
+        now: dict[FolderPath, FolderPath] = {}
 
-        for path, names in asked.folders():
-            if names not in offered_names:
+        def where_now(path: FolderPath) -> FolderPath:
+            if path in now:
+                return now[path]
+
+            names = asked_folders[path]
+
+            if offered_folders.get(path) == names:
+                # one there when asked: by where it was, unless another
+                # window has moved it since, then by its names; made again
+                # if removed meanwhile
+                found = favourites.folder_named(names, near=path)
+                if found is None:
+                    found = favourites.make_folder(names, added=added_now())
+            else:
+                # made in the window: in the one it was made in, as it is
+                # now, not in another of the same name
                 made = asked.items_at(path[:-1])[path[-1]]
-                favourites.make_folder(names, added=made.added)
+                items = favourites.items_at(where_now(path[:-1]))
+                items.append(FavouriteFolder(name=made.name, added=made.added))
+                found = (*now[path[:-1]], len(items) - 1)
 
-        names = dict(asked.folders())[folder]
-        picked = favourites.folder_named(names, near=folder)
+            now[path] = found
+            return found
 
-        if picked is None:
-            # removed meanwhile in another window: made again
-            picked = favourites.make_folder(names, added=added_now())
+        # those made in the window kept, if not picked, in the order made
+        for path in asked_folders:
+            if offered_folders.get(path) != asked_folders[path]:
+                where_now(path)
+
+        picked = where_now(folder)
+        names = asked_folders[folder]
 
         Settings().set("favourites/last_folder", FolderNames(names))
 
