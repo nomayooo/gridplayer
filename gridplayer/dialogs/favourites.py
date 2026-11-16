@@ -455,9 +455,64 @@ class AddAllFavouritesDialog(_InFolderDialog):
         return dialog.favourites, dialog.selected_folder
 
 
+class MoveToFolderDialog(QDialog):
+    """The folder to move favourites into, picked from those of Manage
+    Favourites as it shows them."""
+
+    def __init__(self, folders: list, selected=None, **kwargs):
+        super().__init__(**kwargs)
+
+        self.setWindowTitle(translate("Favourites", "Move To Folder"))
+
+        self.folder = QComboBox(self)
+        self.folder.setMinimumWidth(320)
+
+        for depth, title, tree_item in folders:
+            self.folder.addItem(
+                QIcon.fromTheme("favourites-folder"),
+                FOLDER_INDENT * depth + title,
+                tree_item,
+            )
+
+        shown = [self.folder.itemData(i) for i in range(self.folder.count())]
+        if selected in shown:
+            self.folder.setCurrentIndex(shown.index(selected))
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, Qt.Horizontal, self
+        )
+        buttons.button(QDialogButtonBox.Ok).setText(translate("Favourites", "Move"))
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        form = QFormLayout()
+        form.addRow(translate("Favourites", "Folder:"), self.folder)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(buttons)
+
+    @property
+    def selected_folder(self):
+        return self.folder.currentData()
+
+    @classmethod
+    def ask(cls, parent, folders: list, selected=None):
+        """The tree item of the folder picked, the tree's own root for the
+        top; None for the viewer thinking better of it."""
+
+        dialog = cls(folders=folders, selected=selected, parent=parent)
+
+        if not dialog.exec():
+            return None
+
+        return dialog.selected_folder
+
+
 class ManageFavouritesDialog(QDialog):
     """The favourites as a tree, to be put in order: dragged into folders and
-    about, folders made, anything renamed or removed. Kept only on OK.
+    about, or moved into a folder picked (Move To, in any sort), folders
+    made, anything renamed or removed. Kept only on OK.
 
     A folder, or videos, opened from it into the grid as they are picked
     (Open, or a double click), the window staying for more: a folder's
@@ -510,6 +565,9 @@ class ManageFavouritesDialog(QDialog):
         self.remove_button = QPushButton(translate("Favourites", "Remove"), self)
         self.remove_button.clicked.connect(self.remove_selected)
 
+        self.move_button = QPushButton(translate("Favourites", "Move To..."), self)
+        self.move_button.clicked.connect(self.move_selected)
+
         self.open_button = QPushButton(
             QIcon.fromTheme("add-files"), translate("Favourites", "Open"), self
         )
@@ -548,6 +606,7 @@ class ManageFavouritesDialog(QDialog):
         actions.addWidget(self.open_button)
         actions.addWidget(self.new_folder_button)
         actions.addWidget(self.rename_button)
+        actions.addWidget(self.move_button)
         actions.addWidget(self.remove_button)
         actions.addStretch(1)
         actions.addWidget(sort_label)
@@ -851,6 +910,7 @@ class ManageFavouritesDialog(QDialog):
 
         self.rename_button.setEnabled(len(selected) == 1)
         self.remove_button.setEnabled(bool(selected))
+        self.move_button.setEnabled(bool(selected))
         self.open_button.setEnabled(any(self._to_open(selected)))
 
     def _new_folder_parent(self):
@@ -899,6 +959,105 @@ class ManageFavouritesDialog(QDialog):
         for tree_item in selected:
             parent_item = tree_item.parent() or self.tree.invisibleRootItem()
             parent_item.removeChild(tree_item)
+
+    def _moved_ones(self) -> list:
+        """Those picked, in the order shown, but those within a folder
+        picked, which go with it."""
+
+        picked = {id(tree_item) for tree_item in self.tree.selectedItems()}
+
+        def is_within_picked(tree_item):
+            parent = tree_item.parent()
+            while parent is not None:
+                if id(parent) in picked:
+                    return True
+                parent = parent.parent()
+            return False
+
+        return [
+            tree_item
+            for tree_item in _all_within(self.tree.invisibleRootItem())
+            if id(tree_item) in picked and not is_within_picked(tree_item)
+        ]
+
+    def _folders_to_move_into(self, moved: list) -> list:
+        """(depth, title, tree item) of each folder, the top first, as
+        shown; but those moved and those within them, which cannot hold
+        themselves."""
+
+        moved_ids = {id(tree_item) for tree_item in moved}
+        root = self.tree.invisibleRootItem()
+        folders = [(0, translate("Favourites", "Favourites"), root)]
+
+        def walk(parent_item, depth):
+            for index in range(parent_item.childCount()):
+                tree_item = parent_item.child(index)
+
+                if tree_item.data(0, ITEM_FAVOURITE) is not None:
+                    continue
+                if id(tree_item) in moved_ids:
+                    continue
+
+                folders.append((depth, tree_item.text(0).strip(), tree_item))
+                walk(tree_item, depth + 1)
+
+        walk(root, 1)
+
+        return folders
+
+    def move_selected(self):
+        """Those picked moved into a folder of the viewer's picking, at the
+        end of its own order, whatever it is shown sorted by."""
+
+        moved = self._moved_ones()
+
+        if not moved:
+            return
+
+        parents = {
+            id(tree_item.parent() or self.tree.invisibleRootItem())
+            for tree_item in moved
+        }
+        first_parent = moved[0].parent() or self.tree.invisibleRootItem()
+
+        target = MoveToFolderDialog.ask(
+            parent=self,
+            folders=self._folders_to_move_into(moved),
+            # where they are, when all are in one folder
+            selected=first_parent if len(parents) == 1 else None,
+        )
+
+        if target is None:
+            return
+
+        self.move_into(moved, target)
+
+    def move_into(self, moved: list, target) -> None:
+        within = _all_within(self.tree.invisibleRootItem())
+        expanded = [item for item in within if item.isExpanded()]
+
+        for tree_item in moved:
+            parent_item = tree_item.parent() or self.tree.invisibleRootItem()
+
+            if parent_item is target:
+                continue
+
+            parent_item.removeChild(tree_item)
+            tree_item.setData(0, ITEM_ORDER, self._take_order())
+            target.addChild(tree_item)
+
+        for item in expanded:
+            item.setExpanded(True)
+        target.setExpanded(True)
+
+        if self.sort != FavouritesSort.OWN:
+            self._sort_children(target)
+
+        self.tree.clearSelection()
+        for tree_item in moved:
+            tree_item.setSelected(True)
+        self.tree.setCurrentItem(moved[0], 0, QItemSelectionModel.NoUpdate)
+        self.tree.scrollToItem(moved[0])
 
     def _is_removing_sure(self, selected) -> bool:
         """Asked first when a folder is among them, as all it holds goes
