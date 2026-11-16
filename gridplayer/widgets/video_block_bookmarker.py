@@ -39,6 +39,7 @@ from gridplayer.widgets.bookmark_colors import (
     color_picked_by_hand,
 )
 from gridplayer.widgets.custom_menu import CustomMenu
+from gridplayer.widgets.inline_name_editor import InlineNameEditor
 from gridplayer.widgets.video_block_guards import (
     VideoBlockPart,
     only_initialized,
@@ -55,6 +56,8 @@ class Bookmarker(VideoBlockPart):
 
         # a bookmark's new name being typed, or its colour picked
         self._is_editing_one = False
+        # the box a bookmark's name is being typed in over its list, if any
+        self._in_place = None
 
         # the times of those added here, by the file, first to last: for
         # Remove Last Bookmark to take back the last of them still there
@@ -445,6 +448,56 @@ class Bookmarker(VideoBlockPart):
 
         self._edit(index, name=name.strip() or None, color=color)
 
+    @property
+    def is_renaming_in_place(self) -> bool:
+        return self._in_place is not None
+
+    @only_initialized
+    @only_seekable
+    def rename_in_place(self, time_ms: int, rect):
+        """A bookmark named where it is shown, by its time, its name typed
+        in a box laid over this (on the screen), with no dialog: Enter or a
+        click away keeps it, Escape leaves it as it was, and a name left
+        empty takes it away."""
+
+        times = [bookmark.time_ms for bookmark in self._block.bookmarks]
+
+        if time_ms not in times or self._in_place is not None:
+            return
+
+        index = times.index(time_ms)
+        uri = self._block.video_params.uri
+
+        # held at its start while it is named, as in the Rename dialog
+        self._is_editing_one = True
+
+        # the cell's: gone with it, should it go first
+        editor = InlineNameEditor(
+            text=self._block.bookmarks[index].name or "",
+            placeholder=self.name(index),
+            parent=self._block,
+        )
+        editor.finished.connect(lambda name: self._renamed_in_place(uri, time_ms, name))
+        self._in_place = editor
+        editor.open_over(rect)
+
+    def _renamed_in_place(self, uri, time_ms: int, name):
+        self._in_place = None
+        self._is_editing_one = False
+
+        # still there, by its time: others added or taken away meanwhile
+        # change nothing of it
+        block = self._block
+        if block.is_closing or block.video_params is None:
+            return
+
+        times = [bookmark.time_ms for bookmark in block.bookmarks]
+        if block.video_params.uri == uri and name is not None and time_ms in times:
+            self._edit(times.index(time_ms), name=name.strip() or None)
+
+        # hidden again in its own time, from now
+        block.show_overlay()
+
     @only_initialized
     @only_seekable
     def set_color(self, index: int, color: str | None):
@@ -520,12 +573,17 @@ class Bookmarker(VideoBlockPart):
         dialog.deleteLater()
 
     def close_manager(self):
-        """Close the bookmarks manager with the video it is open on: the video
-        closed, or another file put in its place. What was done in it stays
+        """Close the bookmarks manager with the video it is open on, or the
+        box a name is typed in over its list: the video closed, or another
+        file put in its place. What was done in it stays
         done, as it would with OK."""
 
         if self._manager is not None:
             self._manager.accept()
+
+        # and the name typed over its list, kept as a click away keeps it
+        if self._in_place is not None:
+            self._in_place.close()
 
     def tell_end_held(self, end_action: VideoEndAction):
         """Say the video was paused at its start in place of the end action,

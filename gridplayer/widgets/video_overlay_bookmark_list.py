@@ -7,10 +7,11 @@ rows high at most, the rest of them a turn of the wheel away, no wider than
 a share of the cell, and not there at all in a cell too small to spare the
 room. The one the video is at, or last passed, is picked out. The row under
 the mouse offers to delete its bookmark, a cross in place of its time,
-gone at once when it is clicked, without asking.
+gone at once when it is clicked, without asking. A row double clicked has
+its name typed in place, over it.
 """
 
-from PyQt5.QtCore import QPointF, QRectF, QSize, Qt, pyqtSignal
+from PyQt5.QtCore import QPointF, QRect, QRectF, QSize, Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen, QPolygonF
 
 from gridplayer.models.seek_mark import SeekMarkKind
@@ -49,6 +50,8 @@ TIME_ALPHA = 0.7
 # how much of the row's height the square it is clicked in takes
 DELETE_CROSS = 7
 DELETE_PEN = 1.6
+# the box a name is typed in no narrower than this, in a narrow list
+MIN_RENAME_WIDTH = 160
 
 
 class OverlayBookmarkList(OverlayWidget):
@@ -57,6 +60,9 @@ class OverlayBookmarkList(OverlayWidget):
 
     # a bookmark to delete, by its time
     bookmark_remove_clicked = pyqtSignal(int)
+
+    # a bookmark to name, by its time, typed in over this, on the screen
+    bookmark_rename_requested = pyqtSignal(int, QRect)
 
     fill_alpha = TITLE_FILL_ALPHA
 
@@ -393,6 +399,33 @@ class OverlayBookmarkList(OverlayWidget):
     def mouseDoubleClickEvent(self, event):
         # not the cell's, which a double click makes the only one shown
         event.accept()
+
+        if event.button() != Qt.LeftButton:
+            return
+
+        index = self.row_at(event.pos().y())
+
+        if index is None or self.is_delete_at(event.pos()):
+            return
+
+        self.bookmark_rename_requested.emit(
+            self._rows[index][0], self.name_rect_on_screen(index)
+        )
+
+    def name_rect_on_screen(self, index: int) -> QRect:
+        """Where a row's name is, on the screen, for it to be typed over:
+        from the name to the right end, no narrower than a box to type in
+        needs."""
+
+        place = index - self._first
+        top = self._rows_top() + place * self._row_height()
+        left = SIDE_PADDING + DOT_SIZE + GAP // 2
+        width = max(self.width() - left - SIDE_PADDING, MIN_RENAME_WIDTH)
+
+        return QRect(
+            self.mapToGlobal(QRect(left, top, 0, 0).topLeft()),
+            QSize(width, self._row_height()),
+        )
 
     def wheelEvent(self, event):
         """Through them, where there are more than it shows; the cell's to
