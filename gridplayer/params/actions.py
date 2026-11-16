@@ -312,6 +312,13 @@ ACTIONS = MappingProxyType(
             "func": ("active", "bookmarker.add"),
             "show_if": "is_active_seekable",
         },
+        "Remove Last Bookmark": {
+            "title": translate("Actions", "Remove Last Bookmark"),
+            "icon": "bookmark-remove",
+            "key": "Ctrl+M",
+            "func": ("active", "bookmarker.remove_last_added"),
+            "show_if": "is_active_has_bookmarks",
+        },
         "Previous Bookmark": {
             "title": translate("Actions", "Previous Bookmark"),
             "key": "Alt+,",

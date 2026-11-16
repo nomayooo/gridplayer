@@ -47,6 +47,7 @@ class TestWhereTheyAre:
 
         assert bookmarks == [
             "Add Bookmark",
+            "Remove Last Bookmark",
             "Previous Bookmark",
             "Next Bookmark",
             "Manage Bookmarks",
@@ -87,6 +88,11 @@ class TestTheirKeys:
             ACTIONS["Next Bookmark"]["key"],
         ) == ("M", "Alt+,", "Alt+.")
 
+    def test_taking_the_last_back_on_ctrl_m_beside_adding(self):
+        """As Ctrl+Z takes back a loop's marker."""
+
+        assert ACTIONS["Remove Last Bookmark"]["key"] == "Ctrl+M"
+
     def test_showing_the_list_on_shift_m_beside_adding(self):
         assert ACTIONS["Show Bookmark List"]["key"] == "Shift+M"
 
@@ -98,7 +104,7 @@ class TestTheirKeys:
                 if key:
                     taken.setdefault(key, []).append(name)
 
-        for key in ("M", "Alt+,", "Alt+.", "Shift+M"):
+        for key in ("M", "Alt+,", "Alt+.", "Shift+M", "Ctrl+M"):
             assert len(taken[key]) == 1, (key, taken[key])
 
     def test_the_rest_come_without(self):

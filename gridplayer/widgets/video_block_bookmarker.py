@@ -23,6 +23,7 @@ from gridplayer.params.static import VideoEndAction
 from gridplayer.utils.bookmarks import (
     bookmark_at,
     default_bookmark_name,
+    file_key,
     is_bookmarked,
     is_in_stretch,
     next_bookmark_cycling,
@@ -54,6 +55,10 @@ class Bookmarker(VideoBlockPart):
 
         # a bookmark's new name being typed, or its colour picked
         self._is_editing_one = False
+
+        # the times of those added here, by the file, first to last: for
+        # Remove Last Bookmark to take back the last of them still there
+        self._added: dict[str, list[int]] = {}
 
     def replace(self, bookmarks):
         """Put these in place of the file's bookmarks, in order and one to a
@@ -151,8 +156,40 @@ class Bookmarker(VideoBlockPart):
             return
 
         self.replace(with_bookmark(bookmarks, Bookmark(time_ms=time_ms)))
+        self._added_here().append(time_ms)
 
         self._block.info_change.emit(translate("Bookmarks", "Bookmark added"))
+
+    def _added_here(self) -> list[int]:
+        return self._added.setdefault(file_key(self._block.video_params.uri), [])
+
+    @only_initialized
+    @only_seekable
+    def remove_last_added(self):
+        """Take back the bookmark added here last, of those still there: one
+        after another, back to the first added; the rest left as they are."""
+
+        added = self._added_here()
+        times = [bookmark.time_ms for bookmark in self._block.bookmarks]
+
+        while added:
+            time_ms = added.pop()
+            if time_ms in times:
+                self.remove(times.index(time_ms))
+                return
+
+        self._block.info_change.emit(
+            translate("Bookmarks", "No bookmark added to take back")
+        )
+
+    def remove_at_time(self, time_ms: int):
+        """The one at this time gone, without asking: a row's delete button
+        in the bookmarks' list over the video."""
+
+        times = [bookmark.time_ms for bookmark in self._block.bookmarks]
+
+        if time_ms in times:
+            self.remove(times.index(time_ms))
 
     @only_initialized
     @only_seekable
