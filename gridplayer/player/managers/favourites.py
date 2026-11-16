@@ -19,6 +19,7 @@ from gridplayer.models.favourites import (
     FavouriteFolder,
     Favourites,
     FavouriteVideo,
+    FolderNames,
     FolderPath,
     added_now,
     folders_within,
@@ -62,13 +63,62 @@ class FavouritesManager(ManagerBase):
 
     @property
     def favourites(self) -> Favourites:
-        return Settings().get("favourites")
+        """As they are kept now: read again, for those another window has
+        made or changed since to be here too. A copy, to be changed and
+        saved."""
+
+        return self._kept.model_copy(deep=True)
+
+    @property
+    def _kept(self) -> Favourites:
+        """As they are kept now, read again; to be looked at, not changed."""
+
+        return Settings().sync_get("favourites")
 
     def _save(self, favourites: Favourites) -> None:
         Settings().set("favourites", favourites)
+        # for other windows to find them at once
+        Settings().sync()
+
+    def _last_folder(self, favourites: Favourites) -> FolderPath:
+        """Where the last was saved into, if it is still there; else the
+        top."""
+
+        names = Settings().get("favourites/last_folder").root
+        found = favourites.folder_named(names)
+
+        return () if found is None else found
+
+    def _kept_in(
+        self, offered: Favourites, asked: Favourites, folder: FolderPath
+    ) -> tuple[Favourites, FolderPath]:
+        """The favourites as kept now, with the folders made while the viewer
+        was asked, and where in them the folder picked is: those another
+        window saved meanwhile kept too, not written over by what was read
+        before asking. The folder picked remembered, for the next to be
+        offered it."""
+
+        favourites = self.favourites
+        offered_names = [names for _, names in offered.folders()]
+
+        for path, names in asked.folders():
+            if names not in offered_names:
+                made = asked.items_at(path[:-1])[path[-1]]
+                favourites.make_folder(names, added=made.added)
+
+        names = dict(asked.folders())[folder]
+        picked = favourites.folder_named(names, near=folder)
+
+        if picked is None:
+            # removed meanwhile in another window: made again
+            picked = favourites.make_folder(names, added=added_now())
+
+        Settings().set("favourites/last_folder", FolderNames(names))
+
+        return favourites, picked
 
     def is_any_favourites(self) -> bool:
-        return bool(self.favourites)
+        return bool(self._kept)
 
     # menus
 
@@ -129,7 +179,7 @@ class FavouritesManager(ManagerBase):
 
     def _items_at(self, folder: FolderPath):
         try:
-            return self.favourites.items_at(folder)
+            return self._kept.items_at(folder)
         except KeyError:
             return []
 
@@ -220,7 +270,7 @@ class FavouritesManager(ManagerBase):
 
         # a favourite already: offered as it is, to be replaced
         kept = favourites.find_video(params.uri)
-        folder, name = ((), _name_of(block))
+        folder, name = (self._last_folder(favourites), _name_of(block))
         if kept is not None:
             folder, name = kept[0], kept[1].name
 
@@ -238,7 +288,8 @@ class FavouritesManager(ManagerBase):
         if added is None:
             return
 
-        favourites, folder, name = added
+        asked, folder, name = added
+        favourites, folder = self._kept_in(favourites, asked, folder)
 
         favourites.put_video(folder, _favourite_of(block, name))
 
@@ -261,18 +312,21 @@ class FavouritesManager(ManagerBase):
         if not files:
             return
 
+        offered = self.favourites
+
         added = AddAllFavouritesDialog.ask(
             parent=self.parent(),
-            favourites=self.favourites,
+            favourites=offered,
             count=len(files),
             left_out=len(blocks) - len(files),
             is_selected=is_selected,
+            folder=self._last_folder(offered),
         )
 
         if added is None:
             return
 
-        favourites, folder = added
+        favourites, folder = self._kept_in(offered, *added)
 
         # added at once: the same time each, kept in the grid's order when
         # sorted by it
@@ -295,16 +349,20 @@ class FavouritesManager(ManagerBase):
         if not paths:
             return
 
+        offered = self.favourites
+
         asked = ImportPlaylistsDialog.ask(
             parent=self.parent(),
-            favourites=self.favourites,
+            favourites=offered,
             names=[path.stem for path in paths],
+            folder=self._last_folder(offered),
         )
 
         if asked is None:
             return
 
-        favourites, into, names = asked
+        made, into, names = asked
+        favourites, into = self._kept_in(offered, made, into)
         problems = []
         # all added at the same time, kept in their order when sorted by it
         now = added_now()

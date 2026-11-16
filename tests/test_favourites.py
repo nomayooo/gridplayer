@@ -25,6 +25,7 @@ from gridplayer.models.favourites import (
     FavouriteFolder,
     Favourites,
     FavouriteVideo,
+    FolderNames,
     latest_added,
     videos_in,
 )
@@ -216,12 +217,21 @@ class TestTheModel:
 def stored(monkeypatch):
     """The settings the favourites are kept in, a dict of their own."""
 
-    values = {"favourites": _favourites(), "favourites/sort": FavouritesSort.OWN}
+    values = {
+        "favourites": _favourites(),
+        "favourites/sort": FavouritesSort.OWN,
+        "favourites/last_folder": FolderNames(),
+    }
 
     monkeypatch.setattr(
         manager_module,
         "Settings",
-        lambda: SimpleNamespace(get=values.get, set=values.__setitem__),
+        lambda: SimpleNamespace(
+            get=values.get,
+            sync_get=values.get,
+            set=values.__setitem__,
+            sync=lambda: None,
+        ),
     )
 
     return values
@@ -1001,7 +1011,7 @@ def importing(stored, monkeypatch):
         lambda *_a, **_k: ([str(p) for p in state.picked], ""),
     )
 
-    def ask(parent, favourites, names):
+    def ask(parent, favourites, names, folder=()):
         state.asked.append(names)
         return state.answer(favourites, names)
 

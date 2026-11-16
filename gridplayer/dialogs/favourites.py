@@ -184,7 +184,13 @@ class ImportPlaylistsDialog(_InFolderDialog):
     a folder of the viewer's picking: one under a name the viewer may
     change, several under their own."""
 
-    def __init__(self, favourites: Favourites, names: list[str], **kwargs):
+    def __init__(
+        self,
+        favourites: Favourites,
+        names: list[str],
+        folder: FolderPath = (),
+        **kwargs,
+    ):
         super().__init__(favourites, **kwargs)
 
         self._names = names
@@ -225,7 +231,7 @@ class ImportPlaylistsDialog(_InFolderDialog):
 
         layout.addWidget(self.buttons)
 
-        self.fill_folders()
+        self.fill_folders(selected=folder)
 
     @property
     def names(self) -> list[str]:
@@ -235,12 +241,18 @@ class ImportPlaylistsDialog(_InFolderDialog):
         return [self.name.text().strip()]
 
     @classmethod
-    def ask(cls, parent, favourites: Favourites, names: list[str]):
+    def ask(
+        cls,
+        parent,
+        favourites: Favourites,
+        names: list[str],
+        folder: FolderPath = (),
+    ):
         """(the favourites with any folders made, the folder picked, the
         names of the folders the playlists go in), None for the viewer
-        thinking better of it."""
+        thinking better of it. The folder given picked to begin with."""
 
-        dialog = cls(favourites=favourites, names=names, parent=parent)
+        dialog = cls(favourites=favourites, names=names, folder=folder, parent=parent)
 
         if not dialog.exec() or not all(dialog.names):
             return None
@@ -375,6 +387,7 @@ class AddAllFavouritesDialog(_InFolderDialog):
         count: int,
         left_out: int,
         is_selected: bool = False,
+        folder: FolderPath = (),
         **kwargs,
     ):
         super().__init__(favourites, **kwargs)
@@ -411,7 +424,7 @@ class AddAllFavouritesDialog(_InFolderDialog):
         layout.addWidget(self.left_out_note)
         layout.addWidget(self.buttons)
 
-        self.fill_folders()
+        self.fill_folders(selected=folder)
 
     @classmethod
     def ask(
@@ -421,15 +434,18 @@ class AddAllFavouritesDialog(_InFolderDialog):
         count: int,
         left_out: int,
         is_selected: bool = False,
+        folder: FolderPath = (),
     ):
         """(the favourites with any folders made, the folder picked), None
-        for the viewer thinking better of it."""
+        for the viewer thinking better of it. The folder given picked to
+        begin with."""
 
         dialog = cls(
             favourites=favourites,
             count=count,
             left_out=left_out,
             is_selected=is_selected,
+            folder=folder,
             parent=parent,
         )
 
