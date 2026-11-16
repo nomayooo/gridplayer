@@ -56,10 +56,32 @@ class FileBookmarks(BaseModel):
         return in_order(bookmarks)
 
 
-class RememberedBookmarks(RootModel[dict[str, FileBookmarks]]):
-    """The bookmarks of every file the viewer marked, by the file (see
-    utils.bookmarks.file_key), kept with the player's settings rather than
-    with a playlist: found again whenever the file is opened, in a playlist
-    or not, in this window or another, after the player is closed too."""
+class RememberedFile(FileBookmarks):
+    """A file's bookmarks as the player remembers them: with what tells the
+    file by what is in it (utils.file_fingerprint), for them to follow it
+    when it is moved or renamed. None for a link, and for those remembered
+    before it was kept, found by the file's path alone until it is opened
+    again."""
 
-    root: dict[str, FileBookmarks] = Field(default_factory=dict)
+    fingerprint: str | None = None
+
+
+class RememberedBookmarks(RootModel[dict[str, RememberedFile]]):
+    """The bookmarks of every file the viewer marked, by where the file is
+    (see utils.bookmarks.file_key), kept with the player's settings rather
+    than with a playlist: found again whenever the file is opened, in a
+    playlist or not, in this window or another, after the player is closed
+    too; and by what is in it, wherever it has been moved since."""
+
+    root: dict[str, RememberedFile] = Field(default_factory=dict)
+
+    def key_of(self, fingerprint: str | None) -> str | None:
+        """Where the file of this fingerprint was last, None for nowhere."""
+
+        if fingerprint is None:
+            return None
+
+        return next(
+            (k for k, entry in self.root.items() if entry.fingerprint == fingerprint),
+            None,
+        )

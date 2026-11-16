@@ -2,6 +2,7 @@
 in the player's settings as the viewer adds, renames or removes them, and
 found again whenever the file is opened, in a playlist or not."""
 
+import json
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -9,7 +10,11 @@ import pytest
 from PyQt5.QtWidgets import QWidget
 
 from gridplayer.models.bookmark import Bookmark
-from gridplayer.models.file_bookmarks import FileBookmarks, RememberedBookmarks
+from gridplayer.models.file_bookmarks import (
+    FileBookmarks,
+    RememberedBookmarks,
+    RememberedFile,
+)
 from gridplayer.player.managers.bookmarks import BookmarksManager, BookmarksRegistry
 from gridplayer.settings import default_value
 from gridplayer.utils.bookmarks import file_key
@@ -80,7 +85,7 @@ class TestKeptAsTheyAreMade:
         manager.registry.set(movie, None, A)
         # meanwhile, another window
         another = RememberedBookmarks(dict(_remembered(remembered_bookmarks)))
-        another.root[file_key(other)] = FileBookmarks(uri=other, bookmarks=B)
+        another.root[file_key(other)] = RememberedFile(uri=other, bookmarks=B)
         remembered_bookmarks.set("bookmarks/remembered", another)
 
         manager.registry.set(movie, None, A[:1])
@@ -209,8 +214,30 @@ class TestARegistryAlone:
 
 
 def test_kept_in_the_settings_and_read_back(movie):
-    kept = RememberedBookmarks({file_key(movie): FileBookmarks(uri=movie, bookmarks=A)})
+    kept = RememberedBookmarks(
+        {file_key(movie): RememberedFile(uri=movie, bookmarks=A, fingerprint="1:ab")}
+    )
 
     again = RememberedBookmarks.model_validate_json(kept.model_dump_json())
 
     assert again == kept
+
+
+def test_those_kept_before_fingerprints_read_back(movie):
+    """As the settings of a player before files were told by what is in
+    them have them: no fingerprint, found by the path alone."""
+
+    kept = json.dumps(
+        {
+            file_key(movie): {
+                "uri": movie.as_posix(),
+                "cell": None,
+                "bookmarks": [{"time_ms": 10000}],
+            }
+        }
+    )
+
+    read = RememberedBookmarks.model_validate_json(kept)
+
+    assert read.root[file_key(movie)].fingerprint is None
+    assert read.root[file_key(movie)].bookmarks == [Bookmark(time_ms=10000)]
