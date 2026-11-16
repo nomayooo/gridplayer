@@ -20,11 +20,12 @@ from PyQt5.QtWidgets import QMessageBox
 
 from gridplayer.dialogs.messagebox import QCustomMessageBox
 from gridplayer.dialogs.playlist_bookmarks import PlaylistBookmarksPage
-from gridplayer.models.file_bookmarks import FileBookmarks
+from gridplayer.models.file_bookmarks import FileBookmarks, RememberedFile
 from gridplayer.player.managers.base import ManagerBase
 from gridplayer.playlist_settings import PlaylistSettings
 from gridplayer.settings import Settings
 from gridplayer.utils.bookmarks import file_key, in_order, merged
+from gridplayer.utils.file_fingerprint import file_fingerprint
 from gridplayer.utils.qt import translate
 
 # how many of the files whose cells disagree a question names, before it
@@ -76,9 +77,9 @@ class BookmarksRegistry(QObject):
         # the bookmarks they left one from another
         self._cell_looks: dict[UUID, tuple[str, str]] = {}
 
-        # those a file was given before, in another playlist or none, by its
-        # key: None for none (see BookmarksManager)
-        self.remembered_of = lambda _key: None
+        # those a file was given before, in another playlist or none, by the
+        # file: None for none (see BookmarksManager)
+        self.remembered_of = lambda _uri: None
 
     @property
     def is_shared(self) -> bool:
@@ -119,7 +120,7 @@ class BookmarksRegistry(QObject):
         """Those the file was given before, wherever, with any it has here:
         where a bookmark is at a place one here is, the one here is kept."""
 
-        remembered = self.remembered_of(file_key(uri))
+        remembered = self.remembered_of(uri)
 
         if not remembered:
             return
@@ -372,9 +373,46 @@ class BookmarksManager(ManagerBase):
 
     # remembered by file, whatever the playlist
 
-    def _remembered_of(self, key: str):
-        entry = Settings().get("bookmarks/remembered").root.get(key)
-        return None if entry is None else entry.bookmarks
+    def _remembered_of(self, uri):
+        """Those of the file: by what is in it first, wherever it was when
+        they were kept, moved here with it; else by where it is, those kept
+        before files were told by what is in them, and those of one changed
+        where it is. Read again first, for another window's to be found."""
+
+        key = file_key(uri)
+        fingerprint = file_fingerprint(uri)
+        remembered = Settings().sync_get("bookmarks/remembered")
+
+        was_at = remembered.key_of(fingerprint)
+
+        if was_at is not None:
+            entry = remembered.root[was_at]
+
+            # moved or renamed: kept where it is now, none left where it was
+            # for another file put there to find
+            if was_at != key:
+                self._keep_at(key, uri, entry.bookmarks, fingerprint)
+
+            return entry.bookmarks
+
+        entry = remembered.root.get(key)
+
+        if entry is None:
+            return None
+
+        # kept before files were told by what is in them: told now, to
+        # follow the file from here on
+        if entry.fingerprint is None and fingerprint is not None:
+            self._keep_at(key, uri, entry.bookmarks, fingerprint)
+
+        return entry.bookmarks
+
+    def _keep_at(self, key: str, uri, bookmarks, fingerprint) -> None:
+        remembered = Settings().sync_get("bookmarks/remembered").model_copy(deep=True)
+
+        self._put_remembered(remembered, key, uri, bookmarks, fingerprint)
+
+        Settings().set("bookmarks/remembered", remembered)
 
     def _remember(self, keys: list) -> None:
         """A file's bookmarks as they are here now kept for it, in place of
@@ -385,16 +423,34 @@ class BookmarksManager(ManagerBase):
         remembered = Settings().sync_get("bookmarks/remembered").model_copy(deep=True)
 
         for key in keys:
-            bookmarks = self._registry.file_bookmarks(key)
+            uri = self._registry.file_uri(key)
 
-            if bookmarks:
-                remembered.root[key] = FileBookmarks(
-                    uri=self._registry.file_uri(key), bookmarks=bookmarks
-                )
-            else:
-                remembered.root.pop(key, None)
+            self._put_remembered(
+                remembered,
+                key,
+                uri,
+                self._registry.file_bookmarks(key),
+                file_fingerprint(uri),
+            )
 
         Settings().set("bookmarks/remembered", remembered)
+
+    @staticmethod
+    def _put_remembered(remembered, key: str, uri, bookmarks, fingerprint) -> None:
+        """A file's kept where it is now, by what is in it too; none left
+        where it was before it was moved. With none, none kept."""
+
+        was_at = remembered.key_of(fingerprint)
+
+        if was_at is not None and was_at != key:
+            del remembered.root[was_at]
+
+        if bookmarks:
+            remembered.root[key] = RememberedFile(
+                uri=uri, bookmarks=bookmarks, fingerprint=fingerprint
+            )
+        else:
+            remembered.root.pop(key, None)
 
     def set_bookmarks(self, entries, cells, uris=()):
         self._registry.load(entries, cells)
