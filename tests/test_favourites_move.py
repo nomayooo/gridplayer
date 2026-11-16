@@ -7,7 +7,11 @@ from unittest.mock import Mock
 
 import pytest
 
-from gridplayer.dialogs.favourites import ManageFavouritesDialog, MoveToFolderDialog
+from gridplayer.dialogs.favourites import (
+    ITEM_DEPTH,
+    ManageFavouritesDialog,
+    MoveToFolderDialog,
+)
 from gridplayer.models.favourites import FavouriteFolder, Favourites
 from gridplayer.params.static import FavouritesSort
 from tests.test_favourites import (
@@ -175,12 +179,10 @@ class TestWhereTo:
 
         move_to = MoveToFolderDialog(folders=folders, selected=empty)
 
-        assert [move_to.folder.itemText(i) for i in range(move_to.folder.count())] == [
-            "Favourites",
-            "    Music",
-            "        Live",
-            "    Empty",
-        ]
+        box = move_to.folder
+        assert [
+            (box.itemData(i, ITEM_DEPTH), box.itemText(i)) for i in range(box.count())
+        ] == [(0, "Favourites"), (1, "Music"), (2, "Live"), (1, "Empty")]
         assert move_to.selected_folder is empty
 
     def test_button_only_with_one_picked(self):

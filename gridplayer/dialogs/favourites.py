@@ -24,6 +24,9 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QPushButton,
     QShortcut,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -47,7 +50,11 @@ from gridplayer.settings import Settings
 from gridplayer.utils.qt import count_txt, translate
 from gridplayer.utils.time_txt import ms_time_txt
 
-FOLDER_INDENT = "    "
+# how far in a folder is drawn in a list of them, its icon and name both,
+# for each folder it is within, in pixels
+FOLDER_INDENT = 20
+# where a folder of such a list keeps how deep it is
+ITEM_DEPTH = Qt.UserRole + 10
 
 # what an item of the tree is: a video's favourite, or nothing for a folder
 ITEM_FAVOURITE = Qt.UserRole
@@ -102,6 +109,45 @@ def _all_within(parent_item) -> list:
     return found
 
 
+class _IndentedFolders(QStyledItemDelegate):
+    """A list of folders, each drawn in from the left, its icon and its name
+    together, by how deep it is: the folders within one under it, as in a
+    tree. The row picked highlighted all the way across."""
+
+    def paint(self, painter, option, index):
+        depth = index.data(ITEM_DEPTH) or 0
+
+        if option.state & QStyle.State_Selected:
+            painter.fillRect(option.rect, option.palette.highlight())
+
+        shifted = QStyleOptionViewItem(option)
+        shifted.rect = option.rect.adjusted(FOLDER_INDENT * depth, 0, 0, 0)
+        # no frame of its own around the part drawn in
+        shifted.state &= ~QStyle.State_HasFocus
+
+        super().paint(painter, shifted, index)
+
+    def sizeHint(self, option, index):
+        size = super().sizeHint(option, index)
+        size.setWidth(size.width() + FOLDER_INDENT * (index.data(ITEM_DEPTH) or 0))
+        return size
+
+
+def _folder_box(parent) -> QComboBox:
+    """A box to pick a folder from, its list showing them as a tree."""
+
+    box = QComboBox(parent)
+    box.setMinimumWidth(320)
+    box.setItemDelegate(_IndentedFolders(box))
+
+    return box
+
+
+def _add_folder(box: QComboBox, depth: int, title: str, data) -> None:
+    box.addItem(QIcon.fromTheme("favourites-folder"), title, data)
+    box.setItemData(box.count() - 1, depth, ITEM_DEPTH)
+
+
 def _new_folder_name(parent) -> str | None:
     name = QCustomTextInput.get_text(
         parent,
@@ -124,8 +170,7 @@ class _InFolderDialog(QDialog):
         # a copy, which folders made here go into, kept only on OK
         self.favourites = favourites.model_copy(deep=True)
 
-        self.folder = QComboBox(self)
-        self.folder.setMinimumWidth(320)
+        self.folder = _folder_box(self)
 
         self.new_folder_button = QPushButton(
             translate("Favourites", "New Folder..."), self
@@ -150,11 +195,7 @@ class _InFolderDialog(QDialog):
 
         for path, names in self.favourites.folders():
             title = names[-1] if names else translate("Favourites", "Favourites")
-            self.folder.addItem(
-                QIcon.fromTheme("favourites-folder"),
-                FOLDER_INDENT * len(path) + title,
-                path,
-            )
+            _add_folder(self.folder, len(path), title, path)
 
         # not findData, which goes by the tuple itself rather than its value
         folders = [self.folder.itemData(i) for i in range(self.folder.count())]
@@ -464,15 +505,10 @@ class MoveToFolderDialog(QDialog):
 
         self.setWindowTitle(translate("Favourites", "Move To Folder"))
 
-        self.folder = QComboBox(self)
-        self.folder.setMinimumWidth(320)
+        self.folder = _folder_box(self)
 
         for depth, title, tree_item in folders:
-            self.folder.addItem(
-                QIcon.fromTheme("favourites-folder"),
-                FOLDER_INDENT * depth + title,
-                tree_item,
-            )
+            _add_folder(self.folder, depth, title, tree_item)
 
         shown = [self.folder.itemData(i) for i in range(self.folder.count())]
         if selected in shown:
