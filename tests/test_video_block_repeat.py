@@ -168,6 +168,7 @@ def test_stopped_overlay_uses_hide_timer(mocker):
     block.status.is_kept_for_picture = False
     block.view.is_zoom_ui.return_value = False
     block.navigation.is_list_window_shown = False
+    block.bookmarker.is_renaming_in_place = False
     block.isVisible.return_value = True
     block._is_selected = False
     block._is_overlay_faded = False
@@ -193,6 +194,7 @@ def _overlay_block(mocker, is_selected):
     block._ctx.overlay_timeout = 3
     block.view.is_zoom_ui.return_value = False
     block.navigation.is_list_window_shown = False
+    block.bookmarker.is_renaming_in_place = False
     block.isVisible.return_value = True
     block.is_overlay_fits = True
     block._is_selected = is_selected

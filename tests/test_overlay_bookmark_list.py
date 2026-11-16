@@ -15,6 +15,7 @@ from gridplayer.widgets.video_overlay_bookmark_list import (
     MAX_ROWS,
     MIN_CELL_HEIGHT,
     MIN_CELL_WIDTH,
+    MIN_RENAME_WIDTH,
     OverlayBookmarkList,
 )
 from gridplayer.widgets.video_overlay_elements import BOOKMARK_COLOR
@@ -389,3 +390,58 @@ def test_each_name_shown_whole_where_there_is_room(overlay):
     # more than just its width: Qt cuts one given that alone short
     longest = max(metrics.horizontalAdvance(name) for _, name, _ in shown.rows)
     assert name_width > longest
+
+
+def _double_click(widget, point, button=Qt.LeftButton):
+    QApplication.sendEvent(
+        widget,
+        QMouseEvent(
+            QEvent.MouseButtonDblClick,
+            QPointF(point),
+            button,
+            button,
+            Qt.NoModifier,
+        ),
+    )
+
+
+class TestRenamingInPlace:
+    def test_a_row_double_clicked_asks_for_its_name(self, shown):
+        asked = []
+        shown.bookmark_rename_requested.connect(
+            lambda time_ms, rect: asked.append((time_ms, rect))
+        )
+
+        _double_click(shown, _row_point(shown, 1))
+
+        assert [time_ms for time_ms, _ in asked] == [30000]
+        rect = asked[0][1]
+        row_on_screen = shown.mapToGlobal(_row_point(shown, 1))
+        assert rect.top() <= row_on_screen.y() <= rect.bottom()
+        assert rect.width() >= MIN_RENAME_WIDTH
+
+    def test_not_on_its_cross(self, shown):
+        asked = []
+        shown.bookmark_rename_requested.connect(lambda *args: asked.append(args))
+
+        _double_click(shown, _delete_point(shown, 0))
+
+        assert asked == []
+
+    def test_not_with_another_button(self, shown):
+        asked = []
+        shown.bookmark_rename_requested.connect(lambda *args: asked.append(args))
+
+        _double_click(shown, _row_point(shown, 0), Qt.RightButton)
+
+        assert asked == []
+
+    def test_passed_on_by_the_overlay(self, overlay, shown):
+        asked = []
+        overlay.bookmark_rename_requested.connect(
+            lambda time_ms, _rect: asked.append(time_ms)
+        )
+
+        _double_click(shown, _row_point(shown, 0))
+
+        assert asked == [10000]

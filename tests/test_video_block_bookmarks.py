@@ -10,8 +10,9 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
-from PyQt5.QtCore import QPoint, QSettings
+from PyQt5.QtCore import QPoint, QRect, QSettings, Qt
 from PyQt5.QtGui import QIcon
+from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication, QWidget
 
 from gridplayer.models.bookmark import Bookmark
@@ -30,6 +31,7 @@ from gridplayer.settings import Settings
 from gridplayer.utils.bookmarks import default_bookmark_name
 from gridplayer.utils.sponsorblock import SkipSpan
 from gridplayer.widgets import video_block_bookmarker as bookmarker_module
+from gridplayer.widgets.inline_name_editor import InlineNameEditor
 from gridplayer.widgets.video_block import VideoBlock
 from gridplayer.widgets.video_frame_dummy import VideoFrameDummy
 
@@ -134,6 +136,8 @@ def make_block(tmp_path, mocker):
     yield _make
 
     for block, _parent in made:
+        # a name left being typed in place: done with
+        block.bookmarker.close_manager()
         block.cleanup()
         block.url_resolver.cleanup()
 
@@ -1330,3 +1334,153 @@ class TestDeletedFromTheList:
         block.overlay.bookmark_remove_clicked.emit(30000)
 
         assert _times(block) == [10000]
+
+
+RECT = QRect(100, 100, 200, 24)
+
+
+@pytest.fixture
+def editor():
+    made = InlineNameEditor("Old", placeholder="Bookmark 1")
+    done = []
+    made.finished.connect(done.append)
+    made.open_over(RECT)
+    made.done = done
+
+    yield made
+
+    made.close()
+
+
+class TestTheRenameInPlaceBox:
+    def test_laid_over_the_name_all_of_it_picked(self, editor):
+        assert editor.geometry() == RECT
+        assert editor.selectedText() == "Old"
+        assert editor.placeholderText() == "Bookmark 1"
+        assert not editor.hasFrame()
+
+    def test_enter_keeps_what_is_typed(self, editor):
+        QTest.keyClicks(editor, "New")
+        QTest.keyClick(editor, Qt.Key_Return)
+
+        assert editor.done == ["New"]
+
+    def test_escape_leaves_it(self, editor):
+        QTest.keyClicks(editor, "New")
+        QTest.keyClick(editor, Qt.Key_Escape)
+
+        assert editor.done == [None]
+
+    def test_a_click_away_keeps_it(self, editor):
+        QTest.keyClicks(editor, "New")
+
+        editor.close()
+
+        assert editor.done == ["New"]
+
+    def test_done_once(self, editor):
+        QTest.keyClick(editor, Qt.Key_Return)
+        editor.close()
+
+        assert editor.done == ["Old"]
+
+
+def _typed(block, text, key=Qt.Key_Return):
+    editor = block.bookmarker._in_place
+    editor.setText(text)
+    QTest.keyClick(editor, key)
+
+
+class TestRenamingInPlace:
+    def test_opened_over_the_row_with_its_name(self, block):
+        block.bookmarker.rename_in_place(30000, RECT)
+
+        editor = block.bookmarker._in_place
+        assert editor.text() == "Goal & Run"
+        assert editor.geometry() == RECT
+
+    def test_one_with_no_name_shows_its_number_to_type_over(self, block):
+        block.bookmarker.rename_in_place(10000, RECT)
+
+        editor = block.bookmarker._in_place
+        assert (editor.text(), editor.placeholderText()) == ("", "Bookmark 1")
+
+    def test_renamed_on_enter(self, block):
+        block.bookmarker.rename_in_place(10000, RECT)
+
+        _typed(block, "Kick-off")
+
+        assert block.bookmarks[0] == Bookmark(time_ms=10000, name="Kick-off")
+        assert block.bookmarker._in_place is None
+
+    def test_left_as_it_was_on_escape(self, block):
+        before = list(block.bookmarks)
+        block.bookmarker.rename_in_place(30000, RECT)
+
+        _typed(block, "Something else", Qt.Key_Escape)
+
+        assert list(block.bookmarks) == before
+
+    def test_a_name_left_empty_goes_back_to_its_number(self, block):
+        block.bookmarker.rename_in_place(30000, RECT)
+
+        _typed(block, "   ")
+
+        assert block.bookmarks[1].name is None
+        assert block.bookmarker.name(1) == "Bookmark 2"
+
+    def test_found_by_its_time_when_others_change_meanwhile(self, block):
+        block.bookmarker.rename_in_place(30000, RECT)
+        block.bookmarker.remove_at_time(10000)
+
+        _typed(block, "Still me")
+
+        assert list(block.bookmarks) == [Bookmark(time_ms=30000, name="Still me")]
+
+    def test_gone_meanwhile_nothing_named(self, block):
+        block.bookmarker.rename_in_place(30000, RECT)
+        block.bookmarker.remove_at_time(30000)
+
+        _typed(block, "Nobody")
+
+        assert [b.name for b in block.bookmarks] == [None]
+
+    def test_none_at_the_time_no_box(self, block):
+        block.bookmarker.rename_in_place(12345, RECT)
+
+        assert block.bookmarker._in_place is None
+
+    def test_the_overlay_stays_while_it_is_typed(self, block, mocker):
+        faded = mocker.patch.object(block, "_fade_overlay")
+        block._ctx.is_overlay_hide_on_timeout = True
+        block.bookmarker.rename_in_place(30000, RECT)
+
+        block.hide_overlay()
+
+        faded.assert_not_called()
+        assert block.bookmarker.is_renaming_in_place
+
+    def test_the_video_held_at_its_start_while_typed(self, block):
+        block.bookmarker.rename_in_place(30000, RECT)
+
+        assert block.bookmarker.is_editing
+
+        _typed(block, "Done")
+
+        assert not block.bookmarker.is_editing
+
+    def test_closed_with_the_video_what_is_typed_kept(self, block):
+        block.bookmarker.rename_in_place(30000, RECT)
+        block.bookmarker._in_place.setText("Kept")
+
+        block.bookmarker.close_manager()
+
+        assert block.bookmarks[1].name == "Kept"
+        assert block.bookmarker._in_place is None
+
+    def test_asked_from_the_list(self, block):
+        block.overlay.bookmark_rename_requested.emit(10000, RECT)
+
+        assert block.bookmarker._in_place is not None
+        _typed(block, "From the list")
+        assert block.bookmarks[0].name == "From the list"

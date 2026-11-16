@@ -456,6 +456,7 @@ class VideoBlock(QWidget):
             (overlay.mute_unmute_clicked, self.audio.mute_unmute),
             (overlay.bookmark_clicked, self.bookmarker.jump_to_marker),
             (overlay.bookmark_remove_clicked, self.bookmarker.remove_at_time),
+            (overlay.bookmark_rename_requested, self.bookmarker.rename_in_place),
             (overlay.bookmark_menu_requested, self.bookmarker.show_marker_menu),
             (
                 overlay.bookmark_list_toggle_clicked,
@@ -1308,6 +1309,10 @@ class VideoBlock(QWidget):
 
         # the List window plays in it: it stays in sight, marked
         if self.navigation.is_list_window_shown:
+            return
+
+        # a bookmark's name typed over its list: there until it is done
+        if self.bookmarker.is_renaming_in_place:
             return
 
         if not self._ctx.is_overlay_hide_on_timeout:
