@@ -320,3 +320,58 @@ class TestFindingAndMakingFolders:
         assert favourites.folder_named(["Music", "New", "Deeper"]) == (1, 2, 0)
         assert favourites.make_folder(["Music"], added=None) == (1,)
         assert len(favourites.root) == 3
+
+
+class TestFoldersOfTheSameName:
+    """A folder made in the one picked, when another has the same name:
+    into the one picked, none of them copied."""
+
+    @pytest.fixture
+    def twins(self, stored, monkeypatch):
+        stored["favourites"] = Favourites(
+            [
+                FavouriteFolder(name="Music"),
+                FavouriteFolder(name="Music", items=[FavouriteFolder(name="Live")]),
+            ]
+        )
+        _typed(monkeypatch, "New")
+
+        def answered(self):
+            # the second "Music"'s "Live" picked, a folder made in it
+            self.folder.setCurrentIndex(3)
+            self.new_folder()
+            return True
+
+        monkeypatch.setattr(AddAllFavouritesDialog, "exec", answered)
+
+        return stored
+
+    def test_made_in_the_one_picked(self, twins):
+        _grid_of(_block()).cmd_add_all_to_favourites()
+
+        assert twins["favourites"].folders() == [
+            ((), []),
+            ((0,), ["Music"]),
+            ((1,), ["Music"]),
+            ((1, 0), ["Music", "Live"]),
+            ((1, 0, 0), ["Music", "Live", "New"]),
+        ]
+        assert [v.name for v in twins["favourites"].items_at((1, 0, 0))] == [
+            "Shown title"
+        ]
+
+    def test_two_of_a_name_made_both_kept(self, stored, monkeypatch):
+        _typed(monkeypatch, "Twin")
+
+        def answered(self):
+            self.new_folder()
+            self.folder.setCurrentIndex(0)
+            self.new_folder()
+            return True
+
+        monkeypatch.setattr(AddAllFavouritesDialog, "exec", answered)
+
+        _grid_of(_block()).cmd_add_all_to_favourites()
+
+        assert [f.name for f in stored["favourites"].root[-2:]] == ["Twin", "Twin"]
+        assert stored["favourites"].root[-1].items
