@@ -213,6 +213,51 @@ class Favourites(RootModel[list[FavouriteItem]]):
 
         return found
 
+    def folder_named(
+        self, names: list[str], near: FolderPath | None = None
+    ) -> FolderPath | None:
+        """The folder of these names down to it, None for none: the one
+        where given, if it is still where it was, else the first of them."""
+
+        folders = self.folders()
+
+        if near is not None and (near, list(names)) in folders:
+            return near
+
+        return next((path for path, kept in folders if kept == list(names)), None)
+
+    def make_folder(self, names: list[str], added: datetime | None) -> FolderPath:
+        """The folder of these names down to it, those not there made at the
+        end of the one above them."""
+
+        path: FolderPath = ()
+
+        for name in names:
+            items = self.items_at(path)
+            index = next(
+                (
+                    index
+                    for index, item in enumerate(items)
+                    if isinstance(item, FavouriteFolder) and item.name == name
+                ),
+                None,
+            )
+
+            if index is None:
+                items.append(FavouriteFolder(name=name, added=added))
+                index = len(items) - 1
+
+            path = (*path, index)
+
+        return path
+
+
+class FolderNames(RootModel[list[str]]):
+    """A folder by the names down to it, as it is remembered: still found
+    when those before it are moved or removed. Empty for the top."""
+
+    root: list[str] = Field(default_factory=list)
+
 
 def videos_in(items: list[FavouriteItem]) -> list[FavouriteVideo]:
     """The videos a folder holds itself, not those of its folders."""

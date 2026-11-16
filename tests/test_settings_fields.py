@@ -44,6 +44,7 @@ INTERNAL_SETTINGS = {
     "recent_list_playlists",
     "favourites",
     "favourites/sort",
+    "favourites/last_folder",
     "bookmarks/remembered",
     "player/last_playlist_dir",
 }

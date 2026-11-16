@@ -7,7 +7,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from PyQt5.QtCore import QSettings
 
-from gridplayer.models.favourites import Favourites
+from gridplayer.models.favourites import Favourites, FolderNames
 from gridplayer.models.file_bookmarks import RememberedBookmarks
 from gridplayer.models.keymap_overrides import KeymapOverrides
 from gridplayer.models.recent_list import (
@@ -248,6 +248,9 @@ _default_settings = {
     "favourites": Favourites(),
     # how the menu and Manage Favourites show them, not how they are kept
     "favourites/sort": FavouritesSort.ADDED_DESC,
+    # the folder a favourite was last saved into, for the next to be offered
+    # it again; the top for none yet
+    "favourites/last_folder": FolderNames(),
     # the folder a playlist was last opened from, for Open Playlist to open
     # in again; empty for none yet
     "player/last_playlist_dir": "",
