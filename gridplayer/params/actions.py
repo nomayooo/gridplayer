@@ -1657,7 +1657,8 @@ ACTIONS = MappingProxyType(
             "title": translate("Actions", "Close"),
             "key": "Ctrl+F4",
             "icon": "close",
-            "func": ("active", "close"),
+            # the cells picked out, if any are, else the active one
+            "func": "close_cells",
         },
         # All Videos
         "Play / Pause [ALL]": {
