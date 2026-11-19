@@ -767,8 +767,9 @@ class TestMakingOne:
 
         manager.cmd_manage_favourites()
 
+        # paused, to be looked through before playing
         manager._ctx.commands.add_favourite_videos.assert_called_once_with(
-            [stored["favourites"].root[0]]
+            [stored["favourites"].root[0]], is_paused=True
         )
         manager._ctx.commands.open_in_new_window.assert_not_called()
 
@@ -2070,3 +2071,79 @@ class TestAFolderByTheLatestWithin:
         QApplication.processEvents()
 
         assert _shown(dialog) == ["Recent", "Old"]
+
+
+class TestOpenedPausedFromTheManager:
+    """Opened from Manage Favourites: paused where each opens, whatever new
+    videos are set to start as; from the menu, as they are set to."""
+
+    def test_paused_into_this_window(self, adder):
+        from gridplayer.params.static import VideoInitialState
+
+        adder.add_favourite_videos([_video(position=5000)], is_paused=True)
+
+        ((video,),) = adder.added
+        assert video.playback_state == VideoInitialState.PAUSED
+        assert video.current_position == 5000
+
+    def test_as_new_videos_start_otherwise(self, adder):
+        adder.add_favourite_videos([_video()])
+
+        ((video,),) = adder.added
+        from gridplayer.models.video import Video
+
+        assert video.playback_state == Video(uri=HERE).playback_state
+
+    def test_paused_whatever_new_videos_start_as(self, monkeypatch):
+        from gridplayer.params.static import VideoInitialState
+        from gridplayer.playlist_settings import PlaylistSettings
+
+        settings_class = type(PlaylistSettings())
+        real_get = settings_class.get
+        monkeypatch.setattr(
+            settings_class,
+            "get",
+            lambda self, key: (
+                VideoInitialState.PLAYING
+                if key == "video_defaults/initial_state"
+                else real_get(self, key)
+            ),
+        )
+
+        playing = favourite_as_video(_video())
+        paused = favourite_as_video(_video(), is_paused=True)
+
+        assert playing.playback_state == VideoInitialState.PLAYING
+        assert paused.playback_state == VideoInitialState.PAUSED
+
+    def test_the_manager_opens_them_paused_here_and_apart(
+        self, stored, monkeypatch, tmp_path
+    ):
+        from gridplayer.params.static import VideoInitialState
+
+        apart_file = tmp_path / "apart.mp4"
+        apart_file.write_bytes(b"video")
+        apart = FavouriteVideo(name="Apart", path=apart_file)
+
+        def edit(parent, favourites, on_open):
+            on_open([favourites.root[0]], [[apart]])
+            return None
+
+        monkeypatch.setattr(manager_module.ManageFavouritesDialog, "edit", edit)
+        manager = _manager()
+
+        manager.cmd_manage_favourites()
+
+        commands = manager._ctx.commands
+        assert commands.add_favourite_videos.call_args.kwargs == {"is_paused": True}
+        ((videos,), _) = commands.open_in_new_window.call_args
+        assert [v.playback_state for v in videos] == [VideoInitialState.PAUSED]
+
+    def test_not_from_the_menu(self, stored):
+        manager = _manager()
+
+        manager.cmd_open_favourites_folder((1,))
+
+        assert manager._ctx.commands.add_favourite_videos.call_args.kwargs == {
+            "is_paused": False
+        }

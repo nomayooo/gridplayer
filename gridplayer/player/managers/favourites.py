@@ -220,9 +220,12 @@ class FavouritesManager(ManagerBase):
 
         self.open_favourites(videos_in(items), folders_within(items))
 
-    def open_favourites(self, here: list, apart: list[list]) -> None:
+    def open_favourites(
+        self, here: list, apart: list[list], is_paused: bool = False
+    ) -> None:
         """Favourites opened, some here, the others each list of them in a
-        new window of its own; those whose files are gone said to be.
+        new window of its own; those whose files are gone said to be. Paused
+        where each opens, if asked, whatever new videos start as.
 
         With none to open here and none open here yet, the first of those
         for a window of their own opens here instead, the window not left
@@ -232,7 +235,7 @@ class FavouritesManager(ManagerBase):
             here, apart = apart[0], apart[1:]
 
         if here:
-            self._ctx.commands.add_favourite_videos(here)
+            self._ctx.commands.add_favourite_videos(here, is_paused=is_paused)
 
         missing = []
 
@@ -244,7 +247,7 @@ class FavouritesManager(ManagerBase):
                     missing.append(str(favourite.path))
                     continue
 
-                video = favourite_as_video(favourite)
+                video = favourite_as_video(favourite, is_paused)
                 if video is not None:
                     videos.append(video)
 
@@ -487,7 +490,10 @@ class FavouritesManager(ManagerBase):
         edited = ManageFavouritesDialog.edit(
             parent=self.parent(),
             favourites=self.favourites,
-            on_open=self.open_favourites,
+            # opened from it paused, to be looked through before playing
+            on_open=lambda here, apart: self.open_favourites(
+                here, apart, is_paused=True
+            ),
         )
 
         if edited is not None:

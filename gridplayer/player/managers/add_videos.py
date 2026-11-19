@@ -37,6 +37,7 @@ from gridplayer.params.static import (
     AddMode,
     ListSourceKind,
     VideoEndAction,
+    VideoInitialState,
     is_crop_unpicked,
 )
 from gridplayer.player.managers.base import ManagerBase
@@ -514,11 +515,11 @@ class AddVideosManager(ManagerBase):
         self._requests.append(request)
         self._next_request()
 
-    def add_favourite_videos(self, favourites):
+    def add_favourite_videos(self, favourites, is_paused: bool = False):
         """Favourites into cells of their own, each with the loops it was
         kept with, at where it was kept at, else, with a loop begun and not
-        finished, where that was begun; one whose file is gone is said to
-        be, the rest added."""
+        finished, where that was begun, paused there if asked; one whose
+        file is gone is said to be, the rest added."""
 
         videos, missing = [], []
 
@@ -527,7 +528,7 @@ class AddVideosManager(ManagerBase):
                 missing.append(str(favourite.path))
                 continue
 
-            video = favourite_as_video(favourite)
+            video = favourite_as_video(favourite, is_paused)
             if video is not None:
                 videos.append(video)
 
@@ -1190,13 +1191,14 @@ def list_end_action() -> VideoEndAction:
     return list_step_action(PlaylistSettings().get("video_defaults/end_action"))
 
 
-def favourite_as_video(favourite) -> Video | None:
+def favourite_as_video(favourite, is_paused: bool = False) -> Video | None:
     """A favourite as a video to open: with the loops it was kept with, at
     where it was kept at, else, with a loop begun and not finished, where
-    that was begun."""
+    that was begun; paused there, if asked, whatever new videos start as."""
 
     return _video(
         favourite.path,
+        playback_state=VideoInitialState.PAUSED if is_paused else None,
         loops=list(favourite.loops),
         loop_start=favourite.loop_start,
         earlier_loop_starts=list(favourite.earlier_loop_starts),
