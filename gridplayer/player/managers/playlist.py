@@ -98,6 +98,7 @@ class PlaylistManager(ManagerBase):
     def commands(self):
         return {
             "open_playlist": self.cmd_open_playlist,
+            "load_playlist_file": self.load_playlist_file,
             "save_playlist": self.cmd_save_playlist,
             "save_playlist_as": self.cmd_save_playlist_as,
             "close_playlist": self.cmd_close_playlist,

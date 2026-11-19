@@ -390,6 +390,7 @@ class FavouritesManager(ManagerBase):
         made, into, names = asked
         favourites, into = self._kept_in(offered, made, into)
         problems = []
+        imported = []
         # all added at the same time, kept in their order when sorted by it
         now = added_now()
 
@@ -431,11 +432,26 @@ class FavouritesManager(ManagerBase):
                 _numbered(made),
                 is_folder_only=True,
             )
+            imported.append(path)
 
         self._save(favourites)
 
         if problems:
             self.error.emit("\n".join(problems))
+
+        if imported and Settings().get("favourites/open_after_import"):
+            self._open_imported(imported)
+
+    def _open_imported(self, paths: list[Path]) -> None:
+        """The playlists imported opened as they are, as Open Playlist opens
+        one: the first here, each other in a new window of its own."""
+
+        first, *others = paths
+
+        for path in others:
+            self._ctx.commands.open_files_in_new_window([path])
+
+        self._ctx.commands.load_playlist_file(first)
 
     def _ask_playlists(self) -> list[Path]:
         files, _ = QFileDialog.getOpenFileNames(

@@ -2147,3 +2147,118 @@ class TestOpenedPausedFromTheManager:
         assert manager._ctx.commands.add_favourite_videos.call_args.kwargs == {
             "is_paused": False
         }
+
+
+def _clip():
+    from gridplayer.models.video import Video
+
+    return Video(uri=HERE)
+
+
+class TestOpenedAfterImporting:
+    """Ticked in the Import window: the playlists imported opened as Open
+    Playlist opens one, the first here, each other in a new window."""
+
+    def test_not_unless_asked(self, importing, stored, tmp_path):
+        importing.picked = [_playlist(tmp_path / "Mix.gpls", _clip())]
+
+        importing.manager.cmd_import_playlists()
+
+        commands = importing.manager._ctx.commands
+        commands.load_playlist_file.assert_not_called()
+        commands.open_files_in_new_window.assert_not_called()
+
+    def test_one_here(self, importing, stored, tmp_path):
+        stored["favourites/open_after_import"] = True
+        mix = _playlist(tmp_path / "Mix.gpls", _clip())
+        importing.picked = [mix]
+
+        importing.manager.cmd_import_playlists()
+
+        commands = importing.manager._ctx.commands
+        commands.load_playlist_file.assert_called_once_with(mix)
+        commands.open_files_in_new_window.assert_not_called()
+
+    def test_the_others_each_in_a_window_of_its_own(self, importing, stored, tmp_path):
+        stored["favourites/open_after_import"] = True
+        first = _playlist(tmp_path / "First.gpls", _clip())
+        second = _playlist(tmp_path / "Second.gpls", _clip())
+        third = _playlist(tmp_path / "Third.gpls", _clip())
+        importing.picked = [first, second, third]
+
+        importing.manager.cmd_import_playlists()
+
+        commands = importing.manager._ctx.commands
+        commands.load_playlist_file.assert_called_once_with(first)
+        assert [c.args for c in commands.open_files_in_new_window.call_args_list] == [
+            ([second],),
+            ([third],),
+        ]
+
+    def test_only_those_imported(self, importing, stored, tmp_path):
+        stored["favourites/open_after_import"] = True
+        broken = tmp_path / "Broken.gpls"
+        broken.write_text("not a playlist")
+        good = _playlist(tmp_path / "Good.gpls", _clip())
+        importing.picked = [broken, good]
+
+        importing.manager.cmd_import_playlists()
+
+        commands = importing.manager._ctx.commands
+        commands.load_playlist_file.assert_called_once_with(good)
+        commands.open_files_in_new_window.assert_not_called()
+
+    def test_none_imported_none_opened(self, importing, stored, tmp_path):
+        stored["favourites/open_after_import"] = True
+        broken = tmp_path / "Broken.gpls"
+        broken.write_text("not a playlist")
+        importing.picked = [broken]
+
+        importing.manager.cmd_import_playlists()
+
+        importing.manager._ctx.commands.load_playlist_file.assert_not_called()
+
+    def test_not_when_thought_better_of(self, importing, stored, tmp_path):
+        stored["favourites/open_after_import"] = True
+        importing.picked = [_playlist(tmp_path / "Mix.gpls", _clip())]
+        importing.answer = lambda favourites, names: None
+
+        importing.manager.cmd_import_playlists()
+
+        importing.manager._ctx.commands.load_playlist_file.assert_not_called()
+
+
+class TestTheOpenAfterBox:
+    def test_as_it_was_left(self, undated):
+        undated["favourites/open_after_import"] = True
+
+        dialog = ImportPlaylistsDialog(_favourites(), names=["Mix"])
+
+        assert dialog.open_after.isChecked()
+
+    def test_unticked_at_first(self, undated):
+        dialog = ImportPlaylistsDialog(_favourites(), names=["Mix"])
+
+        assert not dialog.open_after.isChecked()
+
+    def test_kept_on_ok(self, undated, monkeypatch):
+        def ticked(self):
+            self.open_after.setChecked(True)
+            return True
+
+        monkeypatch.setattr(ImportPlaylistsDialog, "exec", ticked)
+
+        ImportPlaylistsDialog.ask(None, _favourites(), ["Mix"])
+
+        assert undated["favourites/open_after_import"] is True
+
+    def test_not_kept_on_cancel(self, undated, monkeypatch):
+        def ticked_then_cancelled(self):
+            self.open_after.setChecked(True)
+            return False
+
+        monkeypatch.setattr(ImportPlaylistsDialog, "exec", ticked_then_cancelled)
+
+        ImportPlaylistsDialog.ask(None, _favourites(), ["Mix"])
+
+        assert "favourites/open_after_import" not in undated

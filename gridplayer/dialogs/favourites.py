@@ -18,6 +18,7 @@ from PyQt5.QtGui import QColor, QCursor, QIcon, QKeySequence, QPixmap
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -275,6 +276,14 @@ class ImportPlaylistsDialog(_InFolderDialog):
             self.count_note.setWordWrap(True)
             layout.addWidget(self.count_note)
 
+        # opened too, once imported, as Open Playlist opens one; kept for
+        # the next time
+        self.open_after = QCheckBox(
+            translate("Favourites", "Open after importing"), self
+        )
+        self.open_after.setChecked(bool(Settings().get("favourites/open_after_import")))
+        layout.addWidget(self.open_after)
+
         layout.addWidget(self.buttons)
 
         self.fill_folders(selected=folder)
@@ -302,6 +311,8 @@ class ImportPlaylistsDialog(_InFolderDialog):
 
         if not dialog.exec() or not all(dialog.names):
             return None
+
+        Settings().set("favourites/open_after_import", dialog.open_after.isChecked())
 
         return dialog.favourites, dialog.selected_folder, dialog.names
 

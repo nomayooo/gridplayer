@@ -89,6 +89,67 @@ class TestTheCommandLine:
         assert sys.argv[1:] == ["a.mp4"]
 
 
+class TestFilesInANewWindow:
+    """Files (a playlist imported, say) opened by a new window of their own,
+    not handed to the player already open."""
+
+    @pytest.fixture(autouse=True)
+    def _kept(self, monkeypatch):
+        monkeypatch.setattr(sys, "argv", ["gridplayer"])
+        monkeypatch.setattr(env, "IS_NEW_WINDOW", False)
+        monkeypatch.setattr(env, "MOVED_CELLS_FILE", None)
+        monkeypatch.setattr(env, "IS_APPIMAGE", False)
+        monkeypatch.setattr(env, "IS_PYINSTALLER", False)
+        monkeypatch.setattr(env, "IS_LINUX", False)
+
+    def test_the_command(self):
+        program, args = command.new_window_files_command([Path("/p/-odd.gpls")])
+
+        assert program == sys.executable
+        assert args == [
+            "-m",
+            "gridplayer",
+            command.NEW_WINDOW_ARG,
+            "--",
+            str(Path("/p/-odd.gpls")),
+        ]
+
+    def test_taken_as_a_window_of_its_own_its_files_its_own(self):
+        init_cli.init_cli_args(
+            [command.NEW_WINDOW_ARG, "--", str(Path("/p/-odd.gpls"))]
+        )
+
+        assert env.IS_NEW_WINDOW
+        assert sys.argv[1:] == [str(Path("/p/-odd.gpls"))]
+
+    def test_not_handed_to_the_player_open(self, monkeypatch):
+        from gridplayer import __main__ as entry
+
+        env.IS_NEW_WINDOW = True
+        delegated = Mock(return_value=True)
+        monkeypatch.setattr(entry, "is_delegated_to_primary", delegated)
+
+        entry.exit_if_delegated()
+
+        delegated.assert_not_called()
+
+    def test_started(self, manager, started):
+        assert manager.cmd_open_files_in_new_window([Path("/p/Mix.gpls")])
+
+        ((_, args),) = started
+        assert args[-3:] == [command.NEW_WINDOW_ARG, "--", str(Path("/p/Mix.gpls"))]
+
+    def test_none_given_none_started(self, manager, started):
+        assert not manager.cmd_open_files_in_new_window([])
+        assert started == []
+
+    def test_said_when_it_could_not_start(self, manager, monkeypatch):
+        monkeypatch.setattr(new_window.QProcess, "startDetached", lambda *_a: False)
+
+        assert not manager.cmd_open_files_in_new_window([Path("/p/Mix.gpls")])
+        assert manager.errors == ["Couldn't open a new window!"]
+
+
 def _block(name, loops=(), media_list=None):
     video = Video(uri=HERE, title=name, loops=list(loops))
     block = SimpleNamespace(

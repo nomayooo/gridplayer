@@ -45,6 +45,7 @@ INTERNAL_SETTINGS = {
     "favourites",
     "favourites/sort",
     "favourites/last_folder",
+    "favourites/open_after_import",
     "bookmarks/remembered",
     "player/last_playlist_dir",
 }
