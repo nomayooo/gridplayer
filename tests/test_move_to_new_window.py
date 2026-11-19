@@ -232,6 +232,110 @@ class TestClosing:
         assert ACTIONS["Close"]["func"] == "close_cells"
 
 
+class TestDuplicating:
+    """Duplicate (Alt+D, the cell's menu): a copy of the cell put after it,
+    the cells picked out each next to its own if it is one of them."""
+
+    @staticmethod
+    def _dropped(manager):
+        return [
+            (call.args[0][0], call.args[2], call.args[3])
+            for call in manager._ctx.commands.layout_drop.call_args_list
+        ]
+
+    def test_a_copy_after_it(self, manager, blocks):
+        from gridplayer.utils.drop_zone import DropZone
+
+        manager._ctx.active_block = blocks[1]
+        manager._ctx.bookmarks.is_shared = True
+
+        manager.cmd_duplicate_cells()
+
+        ((video, next_to, zone),) = self._dropped(manager)
+        assert next_to is blocks[1]
+        assert zone == DropZone.AFTER
+        assert video.loops == [(1000, 2000)]
+        assert video.uri == blocks[1].video_params.uri
+
+    def test_where_it_is_kept(self, manager, blocks):
+        manager._ctx.active_block = blocks[0]
+        blocks[0].video_params.current_position = 42_000
+
+        manager.cmd_duplicate_cells()
+
+        ((video, _, _),) = self._dropped(manager)
+        assert video.current_position == 42_000
+
+    def test_a_cell_of_its_own(self, manager, blocks):
+        manager._ctx.active_block = blocks[0]
+        params = blocks[0].video_params
+
+        manager.cmd_duplicate_cells()
+
+        ((video, _, _),) = self._dropped(manager)
+        assert video.id != params.id
+        assert video is not params
+        # a deep copy: one changed, the other not
+        video.loops.append((1, 2))
+        assert params.loops == []
+
+    def test_not_the_list_it_plays_from(self, manager, blocks):
+        blocks[0].video_params.list_id = uuid4()
+        blocks[0].video_params.list_index = 3
+        manager._ctx.active_block = blocks[0]
+
+        manager.cmd_duplicate_cells()
+
+        ((video, _, _),) = self._dropped(manager)
+        assert (video.list_id, video.list_index) == (None, None)
+
+    def test_the_picked_ones_each_next_to_its_own(self, manager, blocks):
+        _select(manager, blocks[0], blocks[2])
+        manager._ctx.active_block = blocks[2]
+
+        manager.cmd_duplicate_cells()
+
+        assert [next_to for _, next_to, _ in self._dropped(manager)] == [
+            blocks[0],
+            blocks[2],
+        ]
+
+    def test_asked_from_one_not_picked_that_one_alone(self, manager, blocks):
+        _select(manager, blocks[0], blocks[2])
+        manager._ctx.active_block = blocks[1]
+
+        manager.cmd_duplicate_cells()
+
+        assert [next_to for _, next_to, _ in self._dropped(manager)] == [blocks[1]]
+
+    def test_its_own_bookmarks_where_each_cell_keeps_its_own(self, manager, blocks):
+        manager._ctx.bookmarks.is_shared = False
+        blocks[0].bookmarks = [object()]
+        manager._ctx.active_block = blocks[0]
+
+        manager.cmd_duplicate_cells()
+
+        ((video, _, _),) = self._dropped(manager)
+        manager._ctx.bookmarks.set.assert_called_once_with(
+            video.uri, video.id, blocks[0].bookmarks
+        )
+
+    def test_shared_bookmarks_left_to_be_shared(self, manager, blocks):
+        manager._ctx.bookmarks.is_shared = True
+        blocks[0].bookmarks = [object()]
+        manager._ctx.active_block = blocks[0]
+
+        manager.cmd_duplicate_cells()
+
+        manager._ctx.bookmarks.set.assert_not_called()
+
+    def test_alt_d(self):
+        from gridplayer.params.actions import ACTIONS
+
+        assert ACTIONS["Duplicate"]["key"] == "Alt+D"
+        assert ACTIONS["Duplicate"]["func"] == "duplicate_cells"
+
+
 @pytest.fixture
 def started(monkeypatch):
     calls = []

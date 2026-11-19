@@ -398,6 +398,7 @@ SECTIONS = MappingProxyType(
             "Add Up to Here to Selection",
             "Clear Selection",
             "Move to New Window",
+            "Duplicate",
             "---",
             "Delete File",
             "Close",

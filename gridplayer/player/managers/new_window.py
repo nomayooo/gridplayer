@@ -19,6 +19,7 @@ from gridplayer.models.media_list import as_path
 from gridplayer.models.moved_cells import MovedCell, MovedCells
 from gridplayer.models.video import VideoBlockMime
 from gridplayer.player.managers.base import ManagerBase
+from gridplayer.utils.drop_zone import DropZone
 from gridplayer.utils.new_window import new_window_command
 from gridplayer.utils.qt import translate
 
@@ -52,6 +53,7 @@ class NewWindowManager(ManagerBase):
             "open_in_new_window": self.cmd_open_in_new_window,
             "open_moved_cells": self.open_moved_cells,
             "close_cells": self.cmd_close_cells,
+            "duplicate_cells": self.cmd_duplicate_cells,
         }
 
     # picking them out
@@ -127,6 +129,40 @@ class NewWindowManager(ManagerBase):
 
     def is_any_cells_selected(self) -> bool:
         return bool(self._selected_blocks())
+
+    def _acted_on(self) -> list:
+        """What a cell's own action is for: the cells picked out, when it is
+        one of them that is asked; else the one asked alone."""
+
+        active = self._ctx.active_block
+        blocks = self._selected_blocks()
+
+        if active is not None and active not in blocks:
+            return [active]
+
+        return blocks
+
+    def cmd_duplicate_cells(self):
+        """A copy of each cell put next to it, after it in the grid: its
+        video as it is, where it is in it, its loops; its bookmarks too,
+        where each cell keeps its own. Not the list it plays from, which is
+        the cell's own to go through: the copy plays the one video."""
+
+        for block in self._acted_on():
+            params = block.video_params
+
+            if params is None:
+                continue
+
+            video = params.model_copy(
+                deep=True,
+                update={"id": uuid4(), "list_id": None, "list_index": None},
+            )
+
+            if not self._ctx.bookmarks.is_shared and block.bookmarks:
+                self._ctx.bookmarks.set(video.uri, video.id, list(block.bookmarks))
+
+            self._ctx.commands.layout_drop([video], None, block, DropZone.AFTER, False)
 
     def cmd_close_cells(self):
         """The cells picked out closed, all at once, when it is one of them
