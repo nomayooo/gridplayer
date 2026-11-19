@@ -103,8 +103,9 @@ block as an attribute: `status`, `bookmarker`, `view`, `chapters`,
   that makes a `QTimer(block)` cannot take a `Mock` as its parent: patch
   `gridplayer.widgets.video_block_<part>.QTimer`, or use a `QObject`
   stand-in.
-* An exception raised inside a Qt slot aborts the whole test run ("Fatal
-  Python error: Aborted"), not just the test.
+* An exception raised inside a Qt slot fails the test it came in, with its
+  traceback (`_slot_exceptions_fail_the_test` in `tests/conftest.py`); outside
+  the tests it would abort the run ("Fatal Python error: Aborted").
 
 ## Settings dialogs
 
