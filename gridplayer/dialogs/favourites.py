@@ -2,17 +2,22 @@
 video a favourite, in a folder of the viewer's picking, and one to put them
 in order, in folders made, renamed, moved about and removed."""
 
+from pathlib import Path
+
 from PyQt5.QtCore import (
     QDateTime,
+    QEvent,
     QItemSelectionModel,
     QLocale,
+    QPoint,
     Qt,
     QTimer,
     pyqtSignal,
 )
-from PyQt5.QtGui import QIcon, QKeySequence
+from PyQt5.QtGui import QCursor, QIcon, QKeySequence, QPixmap
 from PyQt5.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -545,6 +550,60 @@ class MoveToFolderDialog(QDialog):
         return dialog.selected_folder
 
 
+# how long the mouse rests on a video before it is shown moving
+PREVIEW_DELAY_MS = 500
+# how far from the mouse the box showing it is put
+PREVIEW_OFFSET = QPoint(20, 20)
+
+
+class HoverPreview(QLabel):
+    """A box by the mouse showing a video moving: a frameless window of its
+    own, over everything, taking neither the keys nor the mouse."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setWindowFlags(Qt.ToolTip | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setStyleSheet("background: black; border: 1px solid palette(mid);")
+        self.setAlignment(Qt.AlignCenter)
+        self.hide()
+
+    def clear_frame(self):
+        self.clear()
+
+    def show_frame(self, pixmap, cursor: QPoint):
+        self.setPixmap(pixmap)
+
+        size = pixmap.size()
+        if self.size() != size:
+            self.resize(size)
+
+        if not self.isVisible():
+            self.move(self._place_by(cursor, size))
+            self.show()
+
+    def _place_by(self, cursor: QPoint, size) -> QPoint:
+        """Below and to the right of the mouse; flipped to its other side
+        where the screen ends."""
+
+        place = cursor + PREVIEW_OFFSET
+
+        screen = QApplication.screenAt(cursor)
+        if screen is None:
+            return place
+
+        area = screen.availableGeometry()
+
+        if place.x() + size.width() > area.right():
+            place.setX(cursor.x() - PREVIEW_OFFSET.x() - size.width())
+        if place.y() + size.height() > area.bottom():
+            place.setY(cursor.y() - PREVIEW_OFFSET.y() - size.height())
+
+        return place
+
+
 class ManageFavouritesDialog(QDialog):
     """The favourites as a tree, to be put in order: dragged into folders and
     about, or moved into a folder picked (Move To, in any sort), folders
@@ -611,6 +670,21 @@ class ManageFavouritesDialog(QDialog):
         )
         self.open_button.clicked.connect(self.open_selected)
         self.tree.itemDoubleClicked.connect(lambda item, _: self._open([item]))
+
+        # the video under the mouse shown moving, a moment after it rests
+        # on it, in a box beside it
+        self.tree.setMouseTracking(True)
+        self.tree.itemEntered.connect(self._hovered)
+        self.tree.viewport().installEventFilter(self)
+        self.tree.verticalScrollBar().valueChanged.connect(self.stop_preview)
+
+        self._previewer = None
+        self._preview = HoverPreview(self)
+        self._preview_item = None
+        self._preview_timer = QTimer(self)
+        self._preview_timer.setSingleShot(True)
+        self._preview_timer.setInterval(PREVIEW_DELAY_MS)
+        self._preview_timer.timeout.connect(self._show_preview)
 
         QShortcut(QKeySequence.Delete, self.tree, self.remove_selected)
 
@@ -852,6 +926,89 @@ class ManageFavouritesDialog(QDialog):
 
         if here or apart:
             self.open_requested.emit(here, apart)
+
+    # the video under the mouse shown moving
+
+    def _hovered(self, tree_item, _column=0):
+        video = tree_item.data(0, ITEM_FAVOURITE)
+
+        if video is None or tree_item is self._preview_item:
+            if video is None:
+                self.stop_preview()
+            return
+
+        self.stop_preview()
+
+        # not while one is dragged about, or for a file that is gone
+        if QApplication.mouseButtons() != Qt.NoButton:
+            return
+        if not Path(video.path).is_file():
+            return
+
+        self._preview_item = tree_item
+        self._preview_timer.start()
+
+        # started meanwhile, for it to be ready once the mouse has rested
+        self._clip_previewer().warm_up()
+
+    def _show_preview(self):
+        self._preview_timer.stop()
+        tree_item = self._preview_item
+
+        if tree_item is None or tree_item.treeWidget() is not self.tree:
+            return
+
+        path = Path(tree_item.data(0, ITEM_FAVOURITE).path)
+        previewer = self._clip_previewer()
+
+        if not previewer.is_readable(path) or not previewer.play(path):
+            self._preview_item = None
+            return
+
+        self._preview.clear_frame()
+
+    def _clip_previewer(self):
+        if self._previewer is None:
+            from gridplayer.utils.clip_preview import ClipPreviewer
+
+            self._previewer = ClipPreviewer(self)
+            self._previewer.frame.connect(self._on_preview_frame)
+            self._previewer.failed.connect(self.stop_preview)
+
+        return self._previewer
+
+    def _on_preview_frame(self, image):
+        if self._preview_item is None:
+            return
+
+        self._preview.show_frame(QPixmap.fromImage(image), QCursor.pos())
+
+    def stop_preview(self, *_):
+        self._preview_timer.stop()
+        self._preview_item = None
+        self._preview.hide()
+
+        if self._previewer is not None:
+            self._previewer.stop()
+
+    def eventFilter(self, watched, event):
+        if watched is self.tree.viewport() and event.type() in {
+            QEvent.Leave,
+            QEvent.MouseButtonPress,
+            QEvent.Wheel,
+        }:
+            self.stop_preview()
+
+        return super().eventFilter(watched, event)
+
+    def done(self, result):
+        self.stop_preview()
+
+        if self._previewer is not None:
+            self._previewer.close()
+            self._previewer = None
+
+        super().done(result)
 
     # sorted
 
