@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import traceback
+from contextlib import suppress
 from threading import Thread
 from types import MappingProxyType, SimpleNamespace
 
@@ -335,3 +336,28 @@ def _slot_exceptions_fail_the_test(monkeypatch):
             + "".join(traceback.format_exception(kind, value, tb)),
             pytrace=False,
         )
+
+
+@pytest.fixture(autouse=True)
+def _playlist_title_timers_stopped(monkeypatch):
+    """Each playlist manager a test makes has its window title kept up to
+    date by a timer once its playlist is saved: stopped with the test, not
+    left to tick into a later one, whose stand-in context it then reads."""
+
+    from gridplayer.player.managers.playlist import PlaylistManager
+
+    made = []
+    real_init = PlaylistManager.__init__
+
+    def init(self, *args, **kwargs):
+        real_init(self, *args, **kwargs)
+        made.append(self)
+
+    monkeypatch.setattr(PlaylistManager, "__init__", init)
+
+    yield
+
+    for manager in made:
+        # one whose C++ side is gone already has no timer left
+        with suppress(RuntimeError):
+            manager._title_timer.stop()
