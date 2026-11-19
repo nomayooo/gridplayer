@@ -184,6 +184,54 @@ class TestPicking:
         assert manager._selected == []
 
 
+class TestClosing:
+    """Close (Ctrl+F4, the cell's menu): the cells picked out, all at once,
+    asked from one of them; else the one it is asked from alone."""
+
+    def test_those_picked_out_all(self, manager, blocks):
+        _select(manager, blocks[0], blocks[2])
+        manager._ctx.active_block = blocks[2]
+
+        manager.cmd_close_cells()
+
+        assert [b.close.called for b in blocks] == [True, False, True]
+
+    def test_asked_from_one_not_picked_that_one_alone(self, manager, blocks):
+        _select(manager, blocks[0], blocks[2])
+        manager._ctx.active_block = blocks[1]
+
+        manager.cmd_close_cells()
+
+        assert [b.close.called for b in blocks] == [False, True, False]
+        assert manager.is_any_cells_selected()
+
+    def test_let_go_of_once_closed(self, manager, blocks):
+        _select(manager, blocks[0], blocks[1])
+
+        manager.cmd_close_cells()
+
+        assert not manager.is_any_cells_selected()
+
+    def test_none_picked_out_the_active_one(self, manager, blocks):
+        manager._ctx.active_block = blocks[1]
+
+        manager.cmd_close_cells()
+
+        assert [b.close.called for b in blocks] == [False, True, False]
+
+    def test_nothing_with_nothing_active(self, manager, blocks):
+        manager._ctx.active_block = None
+
+        manager.cmd_close_cells()
+
+        assert not any(b.close.called for b in blocks)
+
+    def test_the_action_closes_them(self):
+        from gridplayer.params.actions import ACTIONS
+
+        assert ACTIONS["Close"]["func"] == "close_cells"
+
+
 @pytest.fixture
 def started(monkeypatch):
     calls = []

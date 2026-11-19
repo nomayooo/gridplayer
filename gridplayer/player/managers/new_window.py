@@ -51,6 +51,7 @@ class NewWindowManager(ManagerBase):
             "move_to_new_window": self.cmd_move_to_new_window,
             "open_in_new_window": self.cmd_open_in_new_window,
             "open_moved_cells": self.open_moved_cells,
+            "close_cells": self.cmd_close_cells,
         }
 
     # picking them out
@@ -126,6 +127,26 @@ class NewWindowManager(ManagerBase):
 
     def is_any_cells_selected(self) -> bool:
         return bool(self._selected_blocks())
+
+    def cmd_close_cells(self):
+        """The cells picked out closed, all at once, when it is one of them
+        that is asked; another, asked from its own menu, alone, as a file
+        manager does with one right clicked outside those picked."""
+
+        active = self._ctx.active_block
+        blocks = self._selected_blocks()
+
+        if active is not None and active not in blocks:
+            active.close()
+            return
+
+        if not blocks:
+            return
+
+        self.cmd_clear_cell_selection()
+
+        for block in blocks:
+            block.close()
 
     def forget_cells_gone(self):
         """The cells closed meanwhile no longer picked out."""
