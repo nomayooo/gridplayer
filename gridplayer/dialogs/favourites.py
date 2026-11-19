@@ -14,7 +14,7 @@ from PyQt5.QtCore import (
     QTimer,
     pyqtSignal,
 )
-from PyQt5.QtGui import QCursor, QIcon, QKeySequence, QPixmap
+from PyQt5.QtGui import QColor, QCursor, QIcon, QKeySequence, QPixmap
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QApplication,
@@ -604,6 +604,47 @@ class HoverPreview(QLabel):
         return place
 
 
+# how strongly the row under the mouse is tinted with the colour picked
+# rows have: enough to see, clearly not picked
+HOVER_TINT_ALPHA = 60
+
+
+class HoverTree(QTreeWidget):
+    """A tree whose row under the mouse is tinted, all the way across."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self._hovered = None
+
+    @property
+    def hovered_item(self):
+        return self._hovered
+
+    def set_hovered(self, tree_item) -> None:
+        if tree_item is self._hovered:
+            return
+
+        self._hovered = tree_item
+        self.viewport().update()
+
+    def hover_color(self) -> QColor:
+        color = QColor(self.palette().highlight().color())
+        color.setAlpha(HOVER_TINT_ALPHA)
+        return color
+
+    def drawRow(self, painter, option, index):
+        # one picked shows that it is, as it is
+        if (
+            self._hovered is not None
+            and self.itemFromIndex(index) is self._hovered
+            and not self._hovered.isSelected()
+        ):
+            painter.fillRect(option.rect, self.hover_color())
+
+        super().drawRow(painter, option, index)
+
+
 class ManageFavouritesDialog(QDialog):
     """The favourites as a tree, to be put in order: dragged into folders and
     about, or moved into a folder picked (Move To, in any sort), folders
@@ -629,7 +670,7 @@ class ManageFavouritesDialog(QDialog):
         self.setWindowTitle(translate("Favourites", "Manage Favourites"))
         self.resize(860, 440)
 
-        self.tree = QTreeWidget(self)
+        self.tree = HoverTree(self)
         self.tree.setColumnCount(5)
         self.tree.setHeaderLabels(
             [
@@ -930,6 +971,9 @@ class ManageFavouritesDialog(QDialog):
     # the video under the mouse shown moving
 
     def _hovered(self, tree_item, _column=0):
+        # the row under the mouse marked, whatever it is
+        self.tree.set_hovered(tree_item)
+
         video = tree_item.data(0, ITEM_FAVOURITE)
 
         if video is None or tree_item is self._preview_item:
@@ -998,6 +1042,11 @@ class ManageFavouritesDialog(QDialog):
             QEvent.Wheel,
         }:
             self.stop_preview()
+
+            # the rows move under the mouse as they scroll: marked again
+            # as it next moves
+            if event.type() != QEvent.MouseButtonPress:
+                self.tree.set_hovered(None)
 
         return super().eventFilter(watched, event)
 

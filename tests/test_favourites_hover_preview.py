@@ -403,3 +403,70 @@ class TestTheProcessLoop:
 
         assert conn.sent == [("failed", 3)]
         assert player.stopped == 1
+
+
+class TestTheRowUnderTheMouse:
+    """Tinted all the way across, as the mouse is on it: a video, or a
+    folder; not a row picked, which shows that it is."""
+
+    def test_marked(self, dialog, previewer):
+        dialog._hovered(_tree_item(dialog, 0))
+
+        assert dialog.tree.hovered_item is _tree_item(dialog, 0)
+
+    def test_a_folder_too(self, dialog, previewer):
+        dialog._hovered(_tree_item(dialog, 1))
+
+        assert dialog.tree.hovered_item is _tree_item(dialog, 1)
+
+    def test_moves_with_the_mouse(self, dialog, previewer):
+        dialog._hovered(_tree_item(dialog, 0))
+        dialog._hovered(_tree_item(dialog, 1, 0))
+
+        assert dialog.tree.hovered_item is _tree_item(dialog, 1, 0)
+
+    @pytest.mark.parametrize("event", [QEvent.Leave, QEvent.Wheel])
+    def test_unmarked_as_the_mouse_leaves_or_scrolls(self, dialog, previewer, event):
+        dialog._hovered(_tree_item(dialog, 0))
+
+        dialog.eventFilter(dialog.tree.viewport(), QEvent(event))
+
+        assert dialog.tree.hovered_item is None
+
+    def test_kept_on_a_click(self, dialog, previewer):
+        dialog._hovered(_tree_item(dialog, 0))
+
+        dialog.eventFilter(dialog.tree.viewport(), QEvent(QEvent.MouseButtonPress))
+
+        assert dialog.tree.hovered_item is _tree_item(dialog, 0)
+
+    @pytest.fixture
+    def laid_out(self, dialog, previewer):
+        dialog.resize(600, 300)
+        dialog.tree.resize(560, 220)
+        dialog.tree.expandAll()
+        dialog.tree.viewport().grab()
+        return dialog
+
+    @staticmethod
+    def _row_colour(dialog, *path):
+        rect = dialog.tree.visualItemRect(_tree_item(dialog, *path))
+        image = dialog.tree.viewport().grab().toImage()
+        # past what the row says, where it is bare
+        return image.pixelColor(rect.right() - 5, rect.center().y()).name()
+
+    def test_drawn_tinted(self, laid_out):
+        bare, other = self._row_colour(laid_out, 2), self._row_colour(laid_out, 0)
+
+        laid_out._hovered(_tree_item(laid_out, 2))
+
+        assert self._row_colour(laid_out, 2) != bare
+        assert self._row_colour(laid_out, 0) == other
+
+    def test_one_picked_not_tinted(self, laid_out):
+        _tree_item(laid_out, 2).setSelected(True)
+        picked = self._row_colour(laid_out, 2)
+
+        laid_out._hovered(_tree_item(laid_out, 2))
+
+        assert self._row_colour(laid_out, 2) == picked
