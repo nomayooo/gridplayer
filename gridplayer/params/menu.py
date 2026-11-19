@@ -321,6 +321,8 @@ SECTIONS = MappingProxyType(
                     "Remove Last Loop",
                     "Loop Chapter",
                     "Loop Reset",
+                    "---",
+                    "Export Loops",
                 ),
                 (
                     "When Finished",

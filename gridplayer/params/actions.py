@@ -408,6 +408,12 @@ ACTIONS = MappingProxyType(
             "check_if": ("is_active_param_set_to", "is_start_random", True),
             "show_if": "is_active_seekable",
         },
+        "Export Loops": {
+            "title": translate("Actions", "Export Loops..."),
+            "icon": "video",
+            "func": "export_loops",
+            "show_if": "is_active_loops_exportable",
+        },
         "Set Loop Start": {
             "title": translate("Actions", "Set Loop Start"),
             "key": ",",
