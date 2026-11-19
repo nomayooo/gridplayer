@@ -20,7 +20,7 @@ from gridplayer.models.moved_cells import MovedCell, MovedCells
 from gridplayer.models.video import VideoBlockMime
 from gridplayer.player.managers.base import ManagerBase
 from gridplayer.utils.drop_zone import DropZone
-from gridplayer.utils.new_window import new_window_command
+from gridplayer.utils.new_window import new_window_command, new_window_files_command
 from gridplayer.utils.qt import translate
 
 
@@ -51,6 +51,7 @@ class NewWindowManager(ManagerBase):
             "selected_cells": self._selected_blocks,
             "move_to_new_window": self.cmd_move_to_new_window,
             "open_in_new_window": self.cmd_open_in_new_window,
+            "open_files_in_new_window": self.cmd_open_files_in_new_window,
             "open_moved_cells": self.open_moved_cells,
             "close_cells": self.cmd_close_cells,
             "duplicate_cells": self.cmd_duplicate_cells,
@@ -254,6 +255,23 @@ class NewWindowManager(ManagerBase):
         )
 
         return self._start_new_window(moved)
+
+    def cmd_open_files_in_new_window(self, files: list) -> bool:
+        """Files (a playlist, videos) opened by a new window of their own,
+        as they would be on the command line; this one left as it is."""
+
+        if not files:
+            return False
+
+        program, args = new_window_files_command(files)
+
+        if QProcess.startDetached(program, args):
+            return True
+
+        self._log.error(f"Couldn't start a new window: {program} {args}")
+        self.error.emit(translate("Error", "Couldn't open a new window!"))
+
+        return False
 
     def _start_new_window(self, moved: MovedCells) -> bool:
         moved_file = _write_moved_cells(moved)

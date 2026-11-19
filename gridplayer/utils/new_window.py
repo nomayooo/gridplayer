@@ -14,10 +14,32 @@ from gridplayer.params import env
 # the command line's option for the file the cells are handed over in
 MOVED_CELLS_ARG = "--moved-cells"
 
+# the command line's option for a window of its own, opening its files
+# itself rather than handing them to the player already open
+NEW_WINDOW_ARG = "--new-window"
+
 
 def new_window_command(moved_cells_file) -> tuple[str, list[str]]:
     """The program to start and its arguments, for a new window to take the
     cells in the file."""
+
+    program, args = _this_program()
+
+    return program, [*args, MOVED_CELLS_ARG, str(moved_cells_file)]
+
+
+def new_window_files_command(files) -> tuple[str, list[str]]:
+    """The program to start and its arguments, for a new window to open the
+    files (a playlist, videos) itself."""
+
+    program, args = _this_program()
+
+    # after --, each a file however it looks
+    return program, [*args, NEW_WINDOW_ARG, "--", *(str(f) for f in files)]
+
+
+def _this_program() -> tuple[str, list[str]]:
+    """The same program, started the same way, on the same display."""
 
     if env.IS_APPIMAGE:
         # what it runs from is gone once the AppImage it was mounted for
@@ -32,4 +54,4 @@ def new_window_command(moved_cells_file) -> tuple[str, list[str]]:
     if env.IS_LINUX and env.QT_PLATFORM in ("xcb", "wayland"):
         args += ["--platform", env.QT_PLATFORM]
 
-    return program, [*args, MOVED_CELLS_ARG, str(moved_cells_file)]
+    return program, args

@@ -251,6 +251,9 @@ _default_settings = {
     # the folder a favourite was last saved into, for the next to be offered
     # it again; the top for none yet
     "favourites/last_folder": FolderNames(),
+    # playlists imported into the favourites opened too, as Open Playlist
+    # opens one
+    "favourites/open_after_import": False,
     # the folder a playlist was last opened from, for Open Playlist to open
     # in again; empty for none yet
     "player/last_playlist_dir": "",

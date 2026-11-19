@@ -27,7 +27,7 @@ class InstanceListenerManager(ManagerBase):
 
         # a window cells were moved into: the files sent to the player go to
         # the one it came from, which is listening already
-        if env.MOVED_CELLS_FILE is not None:
+        if env.MOVED_CELLS_FILE is not None or env.IS_NEW_WINDOW:
             return
 
         QTimer.singleShot(0, self._instance_listener.start)

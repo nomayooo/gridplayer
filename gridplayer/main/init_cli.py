@@ -5,7 +5,7 @@ from pathlib import Path
 
 from gridplayer.params import env
 from gridplayer.utils.app_dir import ENV_USER_DATA_DIR
-from gridplayer.utils.new_window import MOVED_CELLS_ARG
+from gridplayer.utils.new_window import MOVED_CELLS_ARG, NEW_WINDOW_ARG
 from gridplayer.version import __app_name__, __version__
 
 QT_PLATFORMS = ("auto", "xcb", "wayland")
@@ -47,6 +47,8 @@ def init_cli_args(argv=None):
         )
     # not for people: how a player hands cells to the new window it opens
     parser.add_argument(MOVED_CELLS_ARG, metavar="PATH", help=argparse.SUPPRESS)
+    # and how it opens files in a new window of their own
+    parser.add_argument(NEW_WINDOW_ARG, action="store_true", help=argparse.SUPPRESS)
     parser.add_argument(
         "--version",
         action="version",
@@ -71,6 +73,9 @@ def init_cli_args(argv=None):
 
     if args.moved_cells:
         env.MOVED_CELLS_FILE = Path(args.moved_cells)
+
+    if args.new_window:
+        env.IS_NEW_WINDOW = True
 
     if getattr(args, "platform", "auto") != "auto":
         env.QT_PLATFORM = args.platform

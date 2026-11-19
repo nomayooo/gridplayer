@@ -75,6 +75,10 @@ VLC_PYTHON_VERSION = None
 # player.managers.new_window. --moved-cells on the command line sets it
 MOVED_CELLS_FILE: Path | None = None
 
+# a window started to open its files itself (see utils.new_window), not to
+# hand them to the player already open
+IS_NEW_WINDOW = False
+
 if IS_FLATPAK:
     FLATPAK_RUNTIME_DIR = (
         Path(os.environ["XDG_RUNTIME_DIR"])
