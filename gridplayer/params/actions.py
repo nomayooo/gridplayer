@@ -1641,6 +1641,13 @@ ACTIONS = MappingProxyType(
             "show_if": "is_any_cells_selected",
             "func": "clear_cell_selection",
         },
+        "Duplicate": {
+            "title": translate("Actions", "Duplicate"),
+            "key": "Alt+D",
+            "icon": "add-files",
+            # next to it, the cells picked out if it is one of them
+            "func": "duplicate_cells",
+        },
         "Move to New Window": {
             "title": translate("Actions", "Move to New Window"),
             "icon": "open-in-browser",
