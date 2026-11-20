@@ -173,7 +173,7 @@ class DragNDropManager(ManagerBase):
             return False
 
         drag_distance = (event.pos() - self._drag_start_position).manhattanLength()
-        if drag_distance < QApplication.startDragDistance():
+        if drag_distance < drag_start_distance():
             return False
 
         return self._ctx.active_block is not None
@@ -579,3 +579,13 @@ class DragNDropManager(ManagerBase):
             and self._drop_block is not self._source_block
         ):
             self._drop_block.set_drop_indicator(DropIndicator.NONE)
+
+
+def drag_start_distance() -> int:
+    """How far the mouse moves with its button down on a video before it is
+    dragged rather than clicked: as set, and never less than the system's
+    own."""
+
+    return max(
+        Settings().get("player/drag_start_distance"), QApplication.startDragDistance()
+    )

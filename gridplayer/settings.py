@@ -191,6 +191,10 @@ _default_settings = {
     **SUBTITLE_STYLE_DEFAULTS,
     "misc/mouse_hide": True,
     "misc/mouse_hide_timeout": 5,
+    # how far, in pixels, the mouse moves with its button down on a video
+    # before it is dragged rather than clicked: the system's own is a few
+    # pixels on Windows, a wobble while clicking
+    "player/drag_start_distance": 20,
     "misc/vlc_options": "",
     "logging/log_level": logging.WARNING,
     "logging/log_level_vlc": DISABLED,
