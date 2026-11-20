@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 
+- A video is dragged only once the mouse has moved 20 pixels with its button held, so a click to pause that wobbles is still a click; the distance is set in Settings ([#53](https://github.com/nomayooo/gridplayer/pull/53))
 - Stop muting new videos by default, and set their volume in Settings as 0-100% instead of 0.00-1.00 ([#14](https://github.com/nomayooo/gridplayer/pull/14))
 - Let more of the picture through the title box over a video, and draw a 1px border round the active video instead of 5px ([#7](https://github.com/nomayooo/gridplayer/pull/7))
 - Mark each loop on the seek bar in a colour of its own, its start as [ and its end as ], the one playing wider, each edged in black to stand out on any bar ([#4](https://github.com/nomayooo/gridplayer/pull/4)), ([#32](https://github.com/nomayooo/gridplayer/pull/32))
