@@ -193,6 +193,18 @@ GENERAL_FIELDS: tuple[SettingField, ...] = (
         enabled_when=When("misc/mouse_hide"),
     ),
     SpinField(
+        settings_key="player/drag_start_distance",
+        label=translate("SettingsDialog", "Drag a video after moving"),
+        minimum=2,
+        maximum=200,
+        suffix=translate("SettingsDialog", "(px)"),
+        tooltip=translate(
+            "SettingsDialog",
+            "How far the mouse has to move with its button held on a video"
+            " before the video is dragged rather than clicked.",
+        ),
+    ),
+    SpinField(
         settings_key="player/list_max_mb",
         label=translate("SettingsDialog", "M3U size limit"),
         minimum=1,

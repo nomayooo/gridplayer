@@ -645,3 +645,63 @@ class TestTheMarkOverACellPlayingAList:
             shown(MediaList(), DropZone.CENTER, _files(), is_internal=True)
             == DropIndicator.SWAP
         )
+
+
+class TestHowFarBeforeADrag:
+    """A video dragged only once the mouse has moved far enough with its
+    button down, as set: a wobble while clicking to pause is a click."""
+
+    @pytest.fixture
+    def started_at(self, mocker):
+        manager, parent = _make_manager()
+        manager.kept_parent = parent
+        manager._ctx.active_block = object()
+        mocker.patch(
+            "gridplayer.player.managers.drag_n_drop.is_modal_open", return_value=False
+        )
+        manager._drag_start_position = QPoint(100, 100)
+        return manager
+
+    @staticmethod
+    def _moved_by(dx, dy=0):
+        return QMouseEvent(
+            QEvent.MouseMove,
+            QPointF(100 + dx, 100 + dy),
+            Qt.NoButton,
+            Qt.LeftButton,
+            Qt.NoModifier,
+        )
+
+    @pytest.fixture
+    def distance(self, mocker):
+        values = {"player/drag_start_distance": 20}
+        mocker.patch(
+            "gridplayer.player.managers.drag_n_drop.Settings"
+        ).return_value.get.side_effect = values.get
+        mocker.patch.object(QApplication, "startDragDistance", return_value=4)
+        return values
+
+    def test_a_wobble_is_no_drag(self, started_at, distance):
+        assert not started_at._is_drag_started(self._moved_by(8, 6))
+
+    def test_far_enough_is(self, started_at, distance):
+        assert started_at._is_drag_started(self._moved_by(15, 6))
+
+    def test_as_far_as_set(self, started_at, distance):
+        distance["player/drag_start_distance"] = 60
+
+        assert not started_at._is_drag_started(self._moved_by(40, 10))
+        assert started_at._is_drag_started(self._moved_by(50, 10))
+
+    def test_never_less_than_the_systems(self, started_at, distance, mocker):
+        distance["player/drag_start_distance"] = 2
+        mocker.patch.object(QApplication, "startDragDistance", return_value=10)
+
+        assert not started_at._is_drag_started(self._moved_by(6))
+        assert started_at._is_drag_started(self._moved_by(10))
+
+
+def test_twenty_pixels_out_of_the_box():
+    from gridplayer.settings import default_value
+
+    assert default_value("player/drag_start_distance") == 20

@@ -236,6 +236,10 @@ PAGES = (
                 Indented("misc/mouse_hide_timeout"),
             ),
             Section(
+                translate("SettingsDialog", "Mouse"),
+                "player/drag_start_distance",
+            ),
+            Section(
                 translate("SettingsDialog", "Memory"),
                 "player/list_max_mb",
             ),
