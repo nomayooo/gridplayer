@@ -4,6 +4,7 @@ import pytest
 from PyQt5.QtCore import QPoint, Qt
 from PyQt5.QtGui import QColor, QImage, QPainter
 
+from gridplayer.widgets import video_overlay_elements as elements_module
 from gridplayer.widgets.video_overlay_elements import (
     BAR_PROGRESS_COLOR,
     BAR_PROGRESS_COLOR_ON_RED,
@@ -13,15 +14,27 @@ from gridplayer.widgets.video_overlay_elements import (
     LOOP_COLORS,
     LOOP_MARK_EDGE_COLOR,
     LOOP_MARK_TAB_LENGTH,
-    LOOP_MARK_WIDTH,
-    OTHER_LOOP_MARK_WIDTH,
     OverlayLabel,
     OverlayProgressBar,
     OverlayVolumeBar,
     loop_color,
+    loop_mark_widths,
 )
+from tests.conftest import StoredSettings
+
+# the widths out of the box: the loop playing, the others
+LOOP_MARK_WIDTH, OTHER_LOOP_MARK_WIDTH = 3, 2
 
 DARK_PICTURE = QColor("#101010")
+
+
+@pytest.fixture(autouse=True)
+def stored(monkeypatch):
+    """The settings the bars are drawn by, kept apart from the user's."""
+
+    stored = StoredSettings()
+    monkeypatch.setattr(elements_module, "Settings", lambda: stored)
+    return stored
 
 
 def _over_dark_picture(bar):
@@ -194,8 +207,25 @@ class TestLoopMarks:
         assert QColor(image.pixel(outside_start, 1)).name() != loop_color(0)
 
     def test_the_lines_are_3_and_2_pixels(self):
-        assert (LOOP_MARK_WIDTH, OTHER_LOOP_MARK_WIDTH) == (3, 2)
+        assert loop_mark_widths() == (LOOP_MARK_WIDTH, OTHER_LOOP_MARK_WIDTH)
         assert LOOP_MARK_TAB_LENGTH >= 3
+
+    def test_as_wide_as_set(self, seek_bar, stored):
+        stored.set("player/loop_mark_width", 6)
+        seek_bar.loop_start = 0.25
+        seek_bar.loop_end = 0.5
+        seek_bar.loop_color = loop_color(0)
+        seek_bar.other_loops = ((0.75, 0.9, WAITING_COLOR),)
+
+        image = _over_dark_picture(seek_bar)
+
+        assert _line_at(image, 50, image.height() // 2) == (loop_color(0), 6)
+        assert _line_at(image, 150, image.height() // 2) == (WAITING_COLOR, 5)
+
+    def test_one_pixel_wide_the_others_too(self, stored):
+        stored.set("player/loop_mark_width", 1)
+
+        assert loop_mark_widths() == (1, 1)
 
 
 def _contrast(a, b):
