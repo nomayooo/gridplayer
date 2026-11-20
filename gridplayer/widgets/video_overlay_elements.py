@@ -23,6 +23,7 @@ from PyQt5.QtWidgets import QApplication, QSizePolicy, QWidget
 
 from gridplayer.models.seek_mark import SeekMarkKind, chapter_at, segments_at
 from gridplayer.params.static import OVERLAY_ACTIVITY_EVENT
+from gridplayer.settings import Settings
 from gridplayer.utils.bookmarks import bookmark_on
 from gridplayer.utils.drop_zone import DropIndicator
 from gridplayer.utils.qt import translate
@@ -67,11 +68,18 @@ BAR_AHEAD_FADE = 0.4
 # more against each of those, and the colour at 13:1 or more against it.
 LOOP_COLORS = ("#ffeb3b", "#18ffff", "#76ff03", "#b388ff", "#ffffff")
 LOOP_MARK_EDGE_COLOR = "#000000"
-LOOP_MARK_WIDTH = 3
-OTHER_LOOP_MARK_WIDTH = 2
 # how far the top and bottom of a "[" or "]" reach in, and how thick
 LOOP_MARK_TAB_LENGTH = 4
 LOOP_MARK_TAB_THICKNESS = 2
+
+
+def loop_mark_widths() -> tuple[int, int]:
+    """How wide the loop playing is marked, as set, and the others: a pixel
+    less, never under one."""
+
+    width = max(1, Settings().get("player/loop_mark_width"))
+
+    return width, max(1, width - 1)
 
 
 def loop_color(index: int) -> str:
@@ -1641,25 +1649,23 @@ class OverlayProgressBar(OverlayBar):
         self.draw_segments(painter)
         self.draw_chapter_notches(painter)
 
+        width, other_width = loop_mark_widths()
+
         # the loops waiting their turn under the one playing
         for start, end, color in self._other_loops:
             if start > 0:
-                self.draw_loop_mark(
-                    painter, start, QColor(color), OTHER_LOOP_MARK_WIDTH, 1
-                )
+                self.draw_loop_mark(painter, start, QColor(color), other_width, 1)
             if end < 1:
-                self.draw_loop_mark(
-                    painter, end, QColor(color), OTHER_LOOP_MARK_WIDTH, -1
-                )
+                self.draw_loop_mark(painter, end, QColor(color), other_width, -1)
 
         # and the one playing
         color = QColor(self._loop_color)
 
         if self.loop_start > 0:
-            self.draw_loop_mark(painter, self.loop_start, color, LOOP_MARK_WIDTH, 1)
+            self.draw_loop_mark(painter, self.loop_start, color, width, 1)
 
         if self.loop_end < 100:
-            self.draw_loop_mark(painter, self.loop_end, color, LOOP_MARK_WIDTH, -1)
+            self.draw_loop_mark(painter, self.loop_end, color, width, -1)
 
     def _filled_parts(self, is_hovered):
         """What is played from the left, and under the mouse up to it."""
