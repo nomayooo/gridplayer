@@ -32,6 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+- Export Loops: a video's A-B loops made into one video, each fading into the next, in the order they come or were made, with ffmpeg, which on Windows is downloaded once when first needed ([#52](https://github.com/nomayooo/gridplayer/pull/52))
 - Duplicate a video with Alt+D or its menu: a copy put right after it in the grid, where it was in the video, with its loops; the selected videos each next to its own ([#50](https://github.com/nomayooo/gridplayer/pull/50))
 - Open Playlist opens where a playlist was last opened from, in every window and after a restart ([#37](https://github.com/nomayooo/gridplayer/pull/37))
 - Save Session to favourites: the videos of every GridPlayer window open, as they are, into a folder named by the date and time, each window's in a numbered folder of its own ([#28](https://github.com/nomayooo/gridplayer/pull/28))

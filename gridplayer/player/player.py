@@ -18,6 +18,7 @@ from gridplayer.player.managers.instance_listener import InstanceListenerManager
 from gridplayer.player.managers.lists import ListsManager
 from gridplayer.player.managers.locations import LocationsManager
 from gridplayer.player.managers.log import LogManager
+from gridplayer.player.managers.loop_export import LoopExportManager
 from gridplayer.player.managers.macos_fileopen import MacOSFileOpenManager
 from gridplayer.player.managers.media_session import MediaSessionManager
 from gridplayer.player.managers.menu import MenuManager
@@ -77,6 +78,7 @@ class Player(QWidget, ManagersManager):
             "session": SessionManager,
             "new_window": NewWindowManager,
             "delete_files": DeleteFilesManager,
+            "loop_export": LoopExportManager,
             "dialogs": DialogsManager,
             "settings": SettingsManager,
             "actions": ActionsManager,
@@ -273,6 +275,9 @@ class Player(QWidget, ManagersManager):
                 ("error", "dialogs.error"),
             ],
             "delete_files": [
+                ("error", "dialogs.error"),
+            ],
+            "loop_export": [
                 ("error", "dialogs.error"),
             ],
             "favourites": [
