@@ -240,6 +240,10 @@ PAGES = (
                 "player/drag_start_distance",
             ),
             Section(
+                translate("SettingsDialog", "Seek Bar"),
+                "player/loop_mark_width",
+            ),
+            Section(
                 translate("SettingsDialog", "Memory"),
                 "player/list_max_mb",
             ),

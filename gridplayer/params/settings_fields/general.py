@@ -205,6 +205,18 @@ GENERAL_FIELDS: tuple[SettingField, ...] = (
         ),
     ),
     SpinField(
+        settings_key="player/loop_mark_width",
+        label=translate("SettingsDialog", "A-B loop marker width"),
+        minimum=1,
+        maximum=12,
+        suffix=translate("SettingsDialog", "(px)"),
+        tooltip=translate(
+            "SettingsDialog",
+            "How wide the start and end of the A-B loop playing are drawn on"
+            " the seek bar; the other loops are drawn a pixel thinner.",
+        ),
+    ),
+    SpinField(
         settings_key="player/list_max_mb",
         label=translate("SettingsDialog", "M3U size limit"),
         minimum=1,

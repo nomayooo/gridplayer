@@ -195,6 +195,9 @@ _default_settings = {
     # before it is dragged rather than clicked: the system's own is a few
     # pixels on Windows, a wobble while clicking
     "player/drag_start_distance": 20,
+    # how wide, in pixels, the A-B loop playing is marked on the seek bar;
+    # the others a pixel less
+    "player/loop_mark_width": 3,
     "misc/vlc_options": "",
     "logging/log_level": logging.WARNING,
     "logging/log_level_vlc": DISABLED,
