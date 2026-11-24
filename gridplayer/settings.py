@@ -61,7 +61,12 @@ from gridplayer.params.subtitle_encodings import DEFAULT_ENCODING
 from gridplayer.params.subtitle_style import SUBTITLE_STYLE_DEFAULTS
 from gridplayer.utils.app_dir import get_app_data_dir
 from gridplayer.utils.log_config import DISABLED
-from gridplayer.utils.loop_export import ExportQuality, LoopOrder
+from gridplayer.utils.loop_export import (
+    AllMode,
+    ExportQuality,
+    LoopOrder,
+    OutputSize,
+)
 
 SETTINGS = None
 
@@ -266,6 +271,10 @@ _default_settings = {
     "export/loop_fade_s": 0.5,
     "export/loop_order": LoopOrder.TIMELINE,
     "export/loop_quality": ExportQuality.HIGH,
+    # Export Loops of All Videos: a file for each, or one of them all, and
+    # how big that one is
+    "export/all_mode": AllMode.EACH,
+    "export/all_size": OutputSize.LARGEST,
     # the folder a playlist was last opened from, for Open Playlist to open
     # in again; empty for none yet
     "player/last_playlist_dir": "",

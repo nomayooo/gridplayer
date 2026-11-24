@@ -49,6 +49,8 @@ INTERNAL_SETTINGS = {
     "export/loop_fade_s",
     "export/loop_order",
     "export/loop_quality",
+    "export/all_mode",
+    "export/all_size",
     "bookmarks/remembered",
     "player/last_playlist_dir",
 }

@@ -15,22 +15,38 @@ from unittest.mock import Mock
 import pytest
 from PyQt5.QtWidgets import QApplication, QMessageBox
 
-from gridplayer.dialogs.export_loops import ExportLoopsDialog, ExportOptions
+from gridplayer.dialogs.export_loops import (
+    ExportAllLoopsDialog,
+    ExportAllOptions,
+    ExportLoopsDialog,
+    ExportOptions,
+)
 from gridplayer.player.managers import loop_export as manager_module
 from gridplayer.player.managers.loop_export import LoopExportManager
 from gridplayer.utils import ffmpeg_tool
 from gridplayer.utils.loop_export import (
+    AllMode,
     ExportQuality,
     LoopOrder,
+    OutputSize,
     Segment,
+    SourceInfo,
+    SourceLoops,
+    combined_clips,
+    combined_graph,
+    combined_seconds,
     default_target,
     export_command,
     fade_for,
     filter_graph,
+    fps_of,
+    frame_of,
     has_audio_in,
+    info_in,
     output_seconds,
     progress_of,
     segments_of,
+    target_for_each,
 )
 from tests.conftest import StoredSettings
 
@@ -622,3 +638,367 @@ class TestExporting:
 
         assert manager.errors == ["Can't export over the video itself."]
         assert film.stat().st_size > 1000
+
+
+# several videos' loops
+
+
+PROBE_WIDE = (
+    "  Stream #0:0[0x1](und): Video: h264 (High), yuv420p(progressive),"
+    " 1920x1080 [SAR 1:1 DAR 16:9], 4006 kb/s, 29.97 fps, 29.97 tbr\n"
+    "  Stream #0:1[0x2](und): Audio: aac (LC), 48000 Hz, stereo, fltp\n"
+)
+PROBE_PHONE_SILENT = "  Stream #0:0: Video: h264, yuv420p, 1080x1920, 30 fps, 30 tbr\n"
+
+
+class TestWhatIsInEach:
+    def test_size_rate_and_sound(self):
+        assert info_in(PROBE_WIDE) == SourceInfo(True, (1920, 1080), 29.97)
+
+    def test_without_sound(self):
+        assert info_in(PROBE_PHONE_SILENT) == SourceInfo(False, (1080, 1920), 30.0)
+
+    def test_nothing_said(self):
+        assert info_in("") == SourceInfo(False, None, None)
+
+
+def _videos(*infos, loops=((1000, 4000),)):
+    return [
+        SourceLoops(Path(f"/v/{i}.mp4"), [Segment(*span) for span in loops], info)
+        for i, info in enumerate(infos)
+    ]
+
+
+class TestTheFrame:
+    def test_as_the_biggest(self):
+        videos = _videos(SourceInfo(True, (640, 360)), SourceInfo(False, (1081, 1921)))
+
+        # even, for the encoder
+        assert frame_of(videos, OutputSize.LARGEST) == (1080, 1920)
+
+    def test_or_as_asked(self):
+        videos = _videos(SourceInfo(True, (640, 360)))
+
+        assert frame_of(videos, OutputSize.P1080) == (1920, 1080)
+        assert frame_of(videos, OutputSize.P720) == (1280, 720)
+
+    def test_1080p_for_one_saying_nothing(self):
+        assert frame_of(_videos(SourceInfo(True)), OutputSize.LARGEST) == (1920, 1080)
+
+    def test_the_fastest_rate_up_to_60(self):
+        assert fps_of(_videos(SourceInfo(True, fps=25), SourceInfo(True, fps=50))) == 50
+        assert fps_of(_videos(SourceInfo(True, fps=120))) == 60
+        assert fps_of(_videos(SourceInfo(True))) == 30
+
+
+class TestJoiningThemAll:
+    def test_each_made_the_same_size_shape_kept(self):
+        graph, _ = combined_graph(
+            _videos(SourceInfo(True, (640, 360)), SourceInfo(True, (320, 360))),
+            0.5,
+            OutputSize.LARGEST,
+        )
+
+        assert (
+            graph.count(
+                "scale=640:360:force_original_aspect_ratio=decrease,"
+                "pad=640:360:(ow-iw)/2:(oh-ih)/2:color=black"
+            )
+            == 2
+        )
+
+    def test_silence_for_one_without_sound(self):
+        graph, has_audio = combined_graph(
+            _videos(SourceInfo(True, (640, 360)), SourceInfo(False, (640, 360))),
+            0.5,
+            OutputSize.LARGEST,
+        )
+
+        assert has_audio
+        assert "[0:a:0]aformat" in graph
+        assert "[1:a:0]" not in graph
+        assert "anullsrc=channel_layout=stereo:sample_rate=48000" in graph
+        assert "atrim=duration=3.000" in graph
+
+    def test_none_with_sound_none_made(self):
+        graph, has_audio = combined_graph(
+            _videos(SourceInfo(False), SourceInfo(False)), 0.5, OutputSize.P720
+        )
+
+        assert not has_audio
+        assert "anullsrc" not in graph
+
+    def test_every_loop_of_each_in_turn(self):
+        videos = _videos(
+            SourceInfo(True), SourceInfo(True), loops=((1000, 4000), (6000, 8000))
+        )
+
+        clips = combined_clips(videos)
+
+        assert [(source.name, segment.start_ms) for source, segment, _ in clips] == [
+            ("0.mp4", 1000),
+            ("0.mp4", 6000),
+            ("1.mp4", 1000),
+            ("1.mp4", 6000),
+        ]
+        # 3 + 2 + 3 + 2, three fades of 0.5 s
+        assert combined_seconds(videos, 0.5) == pytest.approx(10 - 1.5)
+
+
+class TestEachItsOwnFile:
+    def test_beside_each(self, tmp_path):
+        sources = [tmp_path / "a" / "One.mkv", tmp_path / "b" / "Two.mp4"]
+
+        assert target_for_each(sources, None) == [
+            tmp_path / "a" / "One - loops.mp4",
+            tmp_path / "b" / "Two - loops.mp4",
+        ]
+
+    def test_in_one_folder(self, tmp_path):
+        sources = [tmp_path / "a" / "One.mkv", tmp_path / "b" / "Two.mp4"]
+
+        assert target_for_each(sources, tmp_path / "out") == [
+            tmp_path / "out" / "One - loops.mp4",
+            tmp_path / "out" / "Two - loops.mp4",
+        ]
+
+    def test_one_file_twice_numbered(self, tmp_path):
+        sources = [tmp_path / "One.mkv", tmp_path / "One.mkv", tmp_path / "One.mkv"]
+
+        assert [t.name for t in target_for_each(sources, None)] == [
+            "One - loops.mp4",
+            "One - loops (2).mp4",
+            "One - loops (3).mp4",
+        ]
+
+
+class TestTheAllWindow:
+    def _dialog(self, tmp_path, **kwargs):
+        values = {
+            "target": tmp_path / "All loops.mp4",
+            "video_count": 3,
+            "loop_count": 7,
+            "left_out": 1,
+            "mode": AllMode.EACH,
+            "size": OutputSize.P720,
+            "fade_s": 0.5,
+            "order": LoopOrder.TIMELINE,
+            "quality": ExportQuality.HIGH,
+        }
+        values.update(kwargs)
+        return ExportAllLoopsDialog(**values)
+
+    def test_a_file_for_each_beside_them(self, tmp_path):
+        options = self._dialog(tmp_path).options()
+
+        assert (options.mode, options.folder) == (AllMode.EACH, None)
+
+    def test_in_a_folder(self, tmp_path):
+        dialog = self._dialog(tmp_path)
+        dialog.in_folder_button.setChecked(True)
+        dialog.folder.setText(str(tmp_path / "out"))
+
+        assert dialog.options().folder == tmp_path / "out"
+
+    def test_where_to_and_what_kept_apart(self, tmp_path):
+        """Picking where each goes leaves what is made picked, and back."""
+
+        dialog = self._dialog(tmp_path)
+
+        dialog.in_folder_button.setChecked(True)
+        assert dialog.each_button.isChecked()
+
+        dialog.one_button.setChecked(True)
+        assert dialog.in_folder_button.isChecked()
+
+    def test_one_of_them_all(self, tmp_path):
+        dialog = self._dialog(tmp_path, mode=AllMode.ONE)
+
+        options = dialog.options()
+
+        assert (options.mode, options.target, options.size) == (
+            AllMode.ONE,
+            tmp_path / "All loops.mp4",
+            OutputSize.P720,
+        )
+
+    def test_each_choice_shown_with_its_own(self, tmp_path):
+        dialog = self._dialog(tmp_path)
+
+        assert not dialog.each_panel.isHidden()
+        assert dialog.one_panel.isHidden()
+
+        dialog.one_button.setChecked(True)
+
+        assert dialog.each_panel.isHidden()
+        assert not dialog.one_panel.isHidden()
+
+    def test_no_folder_no_export(self, tmp_path):
+        dialog = self._dialog(tmp_path)
+        dialog.in_folder_button.setChecked(True)
+        dialog.folder.setText(" ")
+
+        assert not dialog.ok_button.isEnabled()
+
+    def test_how_many_and_those_left_out_said(self, tmp_path):
+        dialog = self._dialog(tmp_path)
+        text = dialog.count_note.text()
+
+        assert "3" in text
+        assert "7" in text
+        assert "Left out" in text
+
+
+def _cells(*blocks):
+    for index, block in enumerate(blocks):
+        block.video_params.id = str(index)
+    return blocks
+
+
+def _all_manager(blocks, monkeypatch, tmp_path, selected=()):
+    manager = _manager(None, monkeypatch, tmp_path)
+    manager._ctx.commands = SimpleNamespace(
+        selected_cells=lambda: list(selected),
+        layout_order=lambda: [b.video_params.id for b in blocks],
+    )
+    manager._ctx.video_blocks = SimpleNamespace(
+        blocks_for_ids=lambda ids: [
+            b for i in ids for b in blocks if b.video_params.id == i
+        ]
+    )
+    return manager
+
+
+class TestWhichVideos:
+    def test_all_those_with_loops_in_the_grids_order(
+        self, stored, monkeypatch, tmp_path
+    ):
+        blocks = _cells(
+            _block(tmp_path / "a.mp4", [(1, 2)]),
+            _block(tmp_path / "b.mp4", [(1, None)]),
+            _block("https://x/live", [(1, 2)]),
+            _block(tmp_path / "c.mp4", [(3, 4)]),
+        )
+        manager = _all_manager(blocks, monkeypatch, tmp_path)
+
+        videos, left_out = manager._exportable_blocks()
+
+        assert [source.name for source, _ in videos] == ["a.mp4", "c.mp4"]
+        assert left_out == 2
+        assert manager.is_any_loops_exportable()
+
+    def test_those_picked_out_if_any_are(self, stored, monkeypatch, tmp_path):
+        blocks = _cells(
+            _block(tmp_path / "a.mp4", [(1, 2)]), _block(tmp_path / "c.mp4", [(3, 4)])
+        )
+        manager = _all_manager(blocks, monkeypatch, tmp_path, selected=[blocks[1]])
+
+        videos, left_out = manager._exportable_blocks()
+
+        assert [source.name for source, _ in videos] == ["c.mp4"]
+        assert left_out == 0
+
+    def test_none_none_offered(self, stored, monkeypatch, tmp_path):
+        blocks = _cells(_block(tmp_path / "a.mp4", [(1, None)]))
+        manager = _all_manager(blocks, monkeypatch, tmp_path)
+
+        assert not manager.is_any_loops_exportable()
+
+
+@needs_ffmpeg
+class TestExportingThemAll:
+    @pytest.fixture
+    def films(self, tmp_path):
+        wide = tmp_path / "wide.mp4"
+        shutil.copyfile(_media("b.mp4"), wide)
+        square = tmp_path / "square.mp4"
+        shutil.copyfile(_media("square.mp4"), square)
+        return wide, square
+
+    @pytest.fixture
+    def told(self, monkeypatch):
+        told = Mock()
+        monkeypatch.setattr(manager_module.QCustomMessageBox, "information", told)
+        return told
+
+    def _answer(self, monkeypatch, **options):
+        values = {
+            "mode": AllMode.EACH,
+            "folder": None,
+            "target": Path("unused.mp4"),
+            "size": OutputSize.LARGEST,
+            "fade_s": 0.5,
+            "order": LoopOrder.TIMELINE,
+            "quality": ExportQuality.SMALL,
+        }
+        values.update(options)
+        monkeypatch.setattr(
+            manager_module.ExportAllLoopsDialog,
+            "ask",
+            Mock(return_value=ExportAllOptions(**values)),
+        )
+
+    def test_a_file_for_each(self, stored, monkeypatch, tmp_path, films, told):
+        wide, square = films
+        blocks = _cells(
+            _block(wide, [(2000, 5000), (9000, 12000)]), _block(square, [(1000, 3000)])
+        )
+        out = tmp_path / "out"
+        self._answer(monkeypatch, folder=out)
+        manager = _all_manager(blocks, monkeypatch, tmp_path)
+
+        manager.cmd_export_all_loops()
+        _wait_until(lambda: not manager.is_busy)
+
+        assert manager.errors == []
+        assert _probe(out / "wide - loops.mp4") == (
+            pytest.approx(5.5, abs=0.1),
+            ["video", "audio"],
+        )
+        assert _probe(out / "square - loops.mp4") == (
+            pytest.approx(2.0, abs=0.1),
+            ["video"],
+        )
+        assert told.call_args.kwargs["info"].splitlines() == [
+            str(out / "wide - loops.mp4"),
+            str(out / "square - loops.mp4"),
+        ]
+        assert stored.get("export/all_mode") == AllMode.EACH
+
+    def test_one_of_them_all(self, stored, monkeypatch, tmp_path, films, told):
+        wide, square = films
+        blocks = _cells(
+            _block(wide, [(2000, 5000), (9000, 12000)]), _block(square, [(1000, 3000)])
+        )
+        target = tmp_path / "all.mp4"
+        self._answer(monkeypatch, mode=AllMode.ONE, target=target)
+        manager = _all_manager(blocks, monkeypatch, tmp_path)
+
+        manager.cmd_export_all_loops()
+        _wait_until(lambda: not manager.is_busy)
+
+        assert manager.errors == []
+        length, streams = _probe(target)
+        # 3 + 3 + 2, two fades of 0.5 s; the square one's silence filled
+        assert length == pytest.approx(7.0, abs=0.15)
+        assert streams == ["video", "audio"]
+        assert told.call_args.kwargs["info"] == str(target)
+
+    def test_a_failed_one_stops_those_after_it(
+        self, stored, monkeypatch, tmp_path, films, told
+    ):
+        wide, _square = films
+        broken = tmp_path / "broken.mp4"
+        broken.write_bytes(b"not a video")
+        blocks = _cells(_block(broken, [(0, 1000)]), _block(wide, [(2000, 5000)]))
+        out = tmp_path / "out"
+        self._answer(monkeypatch, folder=out)
+        manager = _all_manager(blocks, monkeypatch, tmp_path)
+
+        manager.cmd_export_all_loops()
+        _wait_until(lambda: not manager.is_busy)
+
+        assert manager.errors[0].startswith("Couldn't export the loops.")
+        assert not (out / "broken - loops.mp4").exists()
+        assert not (out / "wide - loops.mp4").exists()
+        told.assert_not_called()

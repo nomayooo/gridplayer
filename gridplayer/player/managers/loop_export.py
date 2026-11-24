@@ -1,30 +1,40 @@
 """Export Loops: the active video's A-B loops made one video of their own,
 each fading into the next, by ffmpeg (see utils.loop_export), with how far
-along it is shown and a way to stop it.
+along it is shown and a way to stop it. And Export Loops of All Videos: the
+loops of every video in the grid, or of those picked out, each video's into
+a file of its own, or all of them into one.
 
 ffmpeg is the one fetched for the player before, else the system's; on
 Windows, where few have it, fetched once asked (see utils.ffmpeg_tool).
 """
 
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from PyQt5.QtCore import QProcess, Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import QMessageBox, QProgressDialog
 
-from gridplayer.dialogs.export_loops import ExportLoopsDialog
+from gridplayer.dialogs.export_loops import ExportAllLoopsDialog, ExportLoopsDialog
 from gridplayer.dialogs.messagebox import QCustomMessageBox
 from gridplayer.player.managers.base import ManagerBase
 from gridplayer.settings import Settings
 from gridplayer.utils import ffmpeg_tool
 from gridplayer.utils.app_dir import get_app_data_dir
 from gridplayer.utils.loop_export import (
+    AllMode,
+    SourceInfo,
+    SourceLoops,
+    combined_command,
+    combined_seconds,
     default_target,
     export_command,
-    has_audio_in,
+    info_in,
     output_seconds,
     probe_command,
     progress_of,
     segments_of,
+    target_for_each,
 )
 from gridplayer.utils.qt import translate
 
@@ -33,6 +43,19 @@ PROBE_TIMEOUT_MS = 15_000
 
 # how much of what ffmpeg said last is shown when it fails
 ERROR_TAIL_CHARS = 1500
+
+
+# what the file of several videos' loops is called, beside the first
+COMBINED_NAME = "All loops.mp4"
+
+
+@dataclass(frozen=True)
+class _Job:
+    """One ffmpeg run of an export: what it makes, and how long that is."""
+
+    command: list
+    target: Path
+    total_s: float
 
 
 class _Fetcher(QThread):
@@ -86,26 +109,33 @@ class LoopExportManager(ManagerBase):
         self._progress: QProgressDialog | None = None
         self._fetcher: _Fetcher | None = None
 
-        self._target: Path | None = None
-        self._total_s = 0.0
+        # the exports to run one after another, the one running, and the
+        # files made so far
+        self._jobs: list[_Job] = []
+        self._job_index = 0
+        self._made: list[Path] = []
+
         self._output = ""
         self._errors = ""
         self._is_cancelled = False
+
+        # what to do once ffmpeg is there, fetched or not
+        self._then: Callable[[Path], None] | None = None
 
     @property
     def commands(self):
         return {
             "export_loops": self.cmd_export_loops,
             "is_active_loops_exportable": self.is_active_loops_exportable,
+            "export_all_loops": self.cmd_export_all_loops,
+            "is_any_loops_exportable": self.is_any_loops_exportable,
         }
 
     def is_active_loops_exportable(self) -> bool:
-        block = self._ctx.active_block
+        return _loops_of(self._ctx.active_block) is not None
 
-        if block is None or not block.is_local_file:
-            return False
-
-        return bool(segments_of(block.video_params.loops, _order()))
+    def is_any_loops_exportable(self) -> bool:
+        return bool(self._exportable_blocks()[0])
 
     @property
     def is_busy(self) -> bool:
@@ -118,20 +148,53 @@ class LoopExportManager(ManagerBase):
             return
 
         block = self._ctx.active_block
+        loops = _loops_of(block)
 
-        if block is None or not block.is_local_file:
+        if loops is None:
             return
 
-        self._source = Path(block.video_params.uri)
-        self._loops = list(block.video_params.loops)
+        source = Path(block.video_params.uri)
 
-        if not segments_of(self._loops, _order()):
+        self._with_ffmpeg(lambda ffmpeg: self._ask_and_export(ffmpeg, source, loops))
+
+    def cmd_export_all_loops(self):
+        if self.is_busy:
             return
+
+        videos, left_out = self._exportable_blocks()
+
+        if not videos:
+            return
+
+        self._with_ffmpeg(
+            lambda ffmpeg: self._ask_and_export_all(ffmpeg, videos, left_out)
+        )
+
+    def _exportable_blocks(self) -> tuple[list[tuple[Path, list]], int]:
+        """(file, loops) of each video to export, in the grid's order: those
+        picked out, if any are, else all; and how many of them are left out,
+        with no finished loop or not a file."""
+
+        blocks = (
+            self._ctx.commands.selected_cells()
+            or self._ctx.video_blocks.blocks_for_ids(self._ctx.commands.layout_order())
+        )
+
+        videos = []
+        for block in blocks:
+            loops = _loops_of(block)
+            if loops is not None:
+                videos.append((Path(block.video_params.uri), loops))
+
+        return videos, len(blocks) - len(videos)
+
+    def _with_ffmpeg(self, then: Callable[[Path], None]):
+        """then(ffmpeg) once there is one: found, or fetched once asked."""
 
         ffmpeg = ffmpeg_tool.find_ffmpeg(get_app_data_dir())
 
         if ffmpeg is not None:
-            self._ask_and_export(ffmpeg)
+            then(ffmpeg)
             return
 
         if not ffmpeg_tool.can_fetch():
@@ -145,6 +208,7 @@ class LoopExportManager(ManagerBase):
             return
 
         if self._is_fetching_wanted():
+            self._then = then
             self._fetch()
 
     def _is_fetching_wanted(self) -> bool:
@@ -190,10 +254,14 @@ class LoopExportManager(ManagerBase):
 
     def _on_fetched(self, path):
         self._close_progress()
-        self._ask_and_export(Path(path))
+
+        then, self._then = self._then, None
+        if then is not None:
+            then(Path(path))
 
     def _on_fetch_failed(self, message: str):
         self._close_progress()
+        self._then = None
         self.error.emit(
             "{}\n\n{}".format(
                 translate("Export Loops", "Couldn't download ffmpeg."), message
@@ -205,15 +273,15 @@ class LoopExportManager(ManagerBase):
             self._fetcher.deleteLater()
         self._fetcher = None
 
-    # exported
+    # one video
 
-    def _ask_and_export(self, ffmpeg: Path):
+    def _ask_and_export(self, ffmpeg: Path, source: Path, loops: list):
         settings = Settings()
 
         options = ExportLoopsDialog.ask(
             self.parent(),
-            target=default_target(self._source),
-            loop_count=len(segments_of(self._loops, _order())),
+            target=default_target(source),
+            loop_count=len(segments_of(loops, _order())),
             fade_s=settings.get("export/loop_fade_s"),
             order=settings.get("export/loop_order"),
             quality=settings.get("export/loop_quality"),
@@ -222,61 +290,130 @@ class LoopExportManager(ManagerBase):
         if options is None:
             return
 
-        settings.set("export/loop_fade_s", float(options.fade_s))
-        settings.set("export/loop_order", options.order)
-        settings.set("export/loop_quality", options.quality)
+        _remember_common(options)
 
-        self._export(ffmpeg, options)
+        if _is_over(options.target, [source]):
+            return self._over_a_video()
 
-    def _export(self, ffmpeg: Path, options):
-        segments = segments_of(self._loops, options.order)
-
-        if options.target.resolve() == self._source.resolve():
-            self.error.emit(
-                translate("Export Loops", "Can't export over the video itself.")
-            )
+        info = self._probe(ffmpeg, source)
+        if info is None:
             return
 
-        has_audio = self._has_audio(ffmpeg)
-        if has_audio is None:
+        segments = segments_of(loops, options.order)
+
+        self._run(
+            [
+                _Job(
+                    export_command(
+                        ffmpeg,
+                        source,
+                        options.target,
+                        segments,
+                        options.fade_s,
+                        info.has_audio,
+                        options.quality,
+                    ),
+                    options.target,
+                    output_seconds(segments, options.fade_s),
+                )
+            ]
+        )
+
+    # several videos
+
+    def _ask_and_export_all(self, ffmpeg: Path, videos: list, left_out: int):
+        settings = Settings()
+        sources = [source for source, _ in videos]
+
+        options = ExportAllLoopsDialog.ask(
+            self.parent(),
+            target=sources[0].parent / COMBINED_NAME,
+            video_count=len(videos),
+            loop_count=sum(len(segments_of(loops, _order())) for _, loops in videos),
+            left_out=left_out,
+            mode=settings.get("export/all_mode"),
+            size=settings.get("export/all_size"),
+            fade_s=settings.get("export/loop_fade_s"),
+            order=settings.get("export/loop_order"),
+            quality=settings.get("export/loop_quality"),
+        )
+
+        if options is None:
             return
 
-        command = export_command(
-            ffmpeg,
-            self._source,
-            options.target,
-            segments,
-            options.fade_s,
-            has_audio,
-            options.quality,
+        _remember_common(options)
+        settings.set("export/all_mode", options.mode)
+        settings.set("export/all_size", options.size)
+
+        if options.mode == AllMode.EACH:
+            targets = target_for_each(sources, options.folder)
+        else:
+            targets = [options.target]
+
+        if any(_is_over(target, sources) for target in targets):
+            return self._over_a_video()
+
+        if options.folder is not None and options.mode == AllMode.EACH:
+            options.folder.mkdir(parents=True, exist_ok=True)
+
+        # each file asked about once
+        infos = {}
+        for source in dict.fromkeys(sources):
+            info = self._probe(ffmpeg, source)
+            if info is None:
+                return
+            infos[source] = info
+
+        loops_of = [
+            SourceLoops(source, segments_of(loops, options.order), infos[source])
+            for source, loops in videos
+        ]
+
+        if options.mode == AllMode.ONE:
+            jobs = [
+                _Job(
+                    combined_command(
+                        ffmpeg,
+                        loops_of,
+                        options.target,
+                        options.fade_s,
+                        options.size,
+                        options.quality,
+                    ),
+                    options.target,
+                    combined_seconds(loops_of, options.fade_s),
+                )
+            ]
+        else:
+            jobs = [
+                _Job(
+                    export_command(
+                        ffmpeg,
+                        video.source,
+                        target,
+                        video.segments,
+                        options.fade_s,
+                        video.info.has_audio,
+                        options.quality,
+                    ),
+                    target,
+                    output_seconds(video.segments, options.fade_s),
+                )
+                for video, target in zip(loops_of, targets)
+            ]
+
+        self._run(jobs)
+
+    def _over_a_video(self):
+        self.error.emit(
+            translate("Export Loops", "Can't export over the video itself.")
         )
 
-        self._target = options.target
-        self._total_s = output_seconds(segments, options.fade_s)
-        self._output = ""
-        self._errors = ""
-        self._is_cancelled = False
+    def _probe(self, ffmpeg: Path, source: Path) -> SourceInfo | None:
+        """What is in the file: its sound, its size, its frame rate; None
+        where ffmpeg could not be run at all, said so."""
 
-        process = QProcess(self)
-        process.readyReadStandardOutput.connect(self._on_output)
-        process.readyReadStandardError.connect(self._on_errors)
-        process.finished.connect(self._on_finished)
-        process.errorOccurred.connect(self._on_process_error)
-
-        self._progress = self._progress_dialog(
-            translate("Export Loops", "Exporting loops...")
-        )
-        self._progress.setRange(0, 1000)
-        self._progress.canceled.connect(self._cancel)
-
-        self._process = process
-        process.start(command[0], command[1:])
-
-    def _has_audio(self, ffmpeg: Path) -> bool | None:
-        """Whether the video has sound to fade too; None where ffmpeg could
-        not be run at all, said so."""
-
-        command = probe_command(ffmpeg, self._source)
+        command = probe_command(ffmpeg, source)
 
         probe = QProcess(self)
         probe.start(command[0], command[1:])
@@ -288,10 +425,54 @@ class LoopExportManager(ManagerBase):
 
         said = bytes(probe.readAllStandardError()).decode("utf-8", "replace")
 
-        return has_audio_in(said)
+        return info_in(said)
+
+    # run, one after another
+
+    def _run(self, jobs: list[_Job]):
+        self._jobs = jobs
+        self._job_index = 0
+        self._made = []
+        self._is_cancelled = False
+
+        self._progress = self._progress_dialog(
+            translate("Export Loops", "Exporting loops...")
+        )
+        self._progress.setRange(0, 1000)
+        self._progress.canceled.connect(self._cancel)
+
+        self._start_job()
+
+    @property
+    def _job(self) -> _Job | None:
+        if self._job_index < len(self._jobs):
+            return self._jobs[self._job_index]
+        return None
+
+    def _start_job(self):
+        self._output = ""
+        self._errors = ""
+
+        if len(self._jobs) > 1 and self._progress is not None:
+            self._progress.setLabelText(
+                translate(
+                    "Export Loops", "Exporting loops... (video {NUMBER} of {COUNT})"
+                ).format(NUMBER=self._job_index + 1, COUNT=len(self._jobs))
+            )
+
+        process = QProcess(self)
+        process.readyReadStandardOutput.connect(self._on_output)
+        process.readyReadStandardError.connect(self._on_errors)
+        process.finished.connect(self._on_finished)
+        process.errorOccurred.connect(self._on_process_error)
+
+        self._process = process
+
+        command = self._job.command
+        process.start(command[0], command[1:])
 
     def _on_output(self):
-        if self._process is None:
+        if self._process is None or self._job is None:
             return
 
         self._output += bytes(self._process.readAllStandardOutput()).decode(
@@ -300,10 +481,12 @@ class LoopExportManager(ManagerBase):
         # only the latest block of progress matters
         self._output = self._output[-4000:]
 
-        done = progress_of(self._output, self._total_s)
+        done = progress_of(self._output, self._job.total_s)
 
         if done is not None and self._progress is not None:
-            self._progress.setValue(int(done * 1000))
+            # the whole of them: those done, and how far this one is
+            whole = (self._job_index + done) / len(self._jobs)
+            self._progress.setValue(int(whole * 1000))
 
     def _on_errors(self):
         if self._process is None:
@@ -328,36 +511,48 @@ class LoopExportManager(ManagerBase):
             self.error.emit(translate("Export Loops", "Couldn't run ffmpeg."))
 
     def _on_finished(self, exit_code, exit_status):
-        target = self._target
-        is_cancelled = self._is_cancelled
+        job = self._job
         errors = self._errors
-
-        self._done()
-
         is_done = exit_status == QProcess.NormalExit and exit_code == 0
 
-        if is_cancelled or not is_done:
-            # nothing half made left behind
-            if target is not None:
-                target.unlink(missing_ok=True)
+        if self._process is not None:
+            self._process.deleteLater()
+        self._process = None
+
+        if is_done and not self._is_cancelled:
+            self._made.append(job.target)
+            self._job_index += 1
+
+            if self._job is not None:
+                self._start_job()
+                return
+
+        # nothing half made left behind; those made before it kept
+        if not is_done or self._is_cancelled:
+            job.target.unlink(missing_ok=True)
+
+        is_cancelled = self._is_cancelled
+        made = list(self._made)
+
+        self._done()
 
         if is_cancelled:
             return
 
         if not is_done:
-            self.error.emit(
-                "{}\n\n{}".format(
-                    translate("Export Loops", "Couldn't export the loops."),
-                    errors.strip()[-ERROR_TAIL_CHARS:],
-                )
-            )
+            message = translate("Export Loops", "Couldn't export the loops.")
+            if len(self._jobs) > 1:
+                message += "\n" + translate(
+                    "Export Loops", "Of {SOURCE}, after {COUNT} made."
+                ).format(SOURCE=job.target.name, COUNT=len(made))
+            self.error.emit(f"{message}\n\n{errors.strip()[-ERROR_TAIL_CHARS:]}")
             return
 
         QCustomMessageBox.information(
             self.parent(),
             translate("Export Loops", "Export Loops"),
             translate("Export Loops", "Loops exported to:"),
-            info=str(target),
+            info="\n".join(str(target) for target in made),
         )
 
     def _done(self):
@@ -367,7 +562,8 @@ class LoopExportManager(ManagerBase):
             self._process.deleteLater()
 
         self._process = None
-        self._target = None
+        self._jobs = []
+        self._job_index = 0
 
     # how far along
 
@@ -407,3 +603,27 @@ class LoopExportManager(ManagerBase):
 
 def _order():
     return Settings().get("export/loop_order")
+
+
+def _loops_of(block) -> list | None:
+    """A cell's loops to export: None for one with no finished loop, or not
+    a file."""
+
+    if block is None or not block.is_local_file or block.video_params is None:
+        return None
+
+    loops = list(block.video_params.loops)
+
+    return loops if segments_of(loops, _order()) else None
+
+
+def _remember_common(options):
+    settings = Settings()
+    settings.set("export/loop_fade_s", float(options.fade_s))
+    settings.set("export/loop_order", options.order)
+    settings.set("export/loop_quality", options.quality)
+
+
+def _is_over(target: Path, sources: list[Path]) -> bool:
+    resolved = target.resolve()
+    return any(resolved == source.resolve() for source in sources)
