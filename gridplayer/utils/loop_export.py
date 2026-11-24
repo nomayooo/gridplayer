@@ -22,6 +22,13 @@ class LoopOrder(Enum):
     MADE = "made"
 
 
+class AllMode(Enum):
+    """Several videos' loops: a file for each, or all of them in one."""
+
+    EACH = "each"
+    ONE = "one"
+
+
 class ExportQuality(Enum):
     HIGH = "high"
     MEDIUM = "medium"
@@ -98,13 +105,21 @@ def filter_graph(segments: list[Segment], fade_s: float, has_audio: bool) -> str
         if has_audio:
             parts.append(f"[{i}:a:0]asetpts=PTS-STARTPTS[a{i}]")
 
+    return ";".join(parts + _joined(segments, fade, has_audio))
+
+
+def _joined(segments: list[Segment], fade: float, has_audio: bool) -> list[str]:
+    """The clips ready as [v0], [a0], [v1]... joined into [vout] (and
+    [aout]): each crossfading into the next, or one after another."""
+
+    parts = []
     count = len(segments)
 
     if count == 1:
         parts.append("[v0]null[vout]")
         if has_audio:
             parts.append("[a0]anull[aout]")
-        return ";".join(parts)
+        return parts
 
     if fade == 0:
         inputs = "".join(
@@ -112,7 +127,7 @@ def filter_graph(segments: list[Segment], fade_s: float, has_audio: bool) -> str
         )
         outputs = "[vout][aout]" if has_audio else "[vout]"
         parts.append(f"{inputs}concat=n={count}:v=1:a={1 if has_audio else 0}{outputs}")
-        return ";".join(parts)
+        return parts
 
     # what has been joined so far, and how long it is
     video, audio = "v0", "a0"
@@ -136,7 +151,7 @@ def filter_graph(segments: list[Segment], fade_s: float, has_audio: bool) -> str
         video = video_out
         length += segments[i].seconds - fade
 
-    return ";".join(parts)
+    return parts
 
 
 def export_command(
@@ -151,14 +166,23 @@ def export_command(
     """The program and its arguments, as a list, for QProcess or subprocess;
     progress written to its standard output (see progress_of)."""
 
-    graph = filter_graph(segments, fade_s, has_audio)
+    return _command(
+        ffmpeg,
+        [(source, segment) for segment in segments],
+        filter_graph(segments, fade_s, has_audio),
+        target,
+        has_audio,
+        quality,
+    )
 
+
+def _command(ffmpeg, clips, graph: str, target, has_audio: bool, quality):
     command = [str(ffmpeg), "-hide_banner", "-nostdin", "-y"]
 
     # each loop the file opened again where it starts, for just as long:
     # ffmpeg seeks there rather than reading all before it, and the loops
     # come in any order
-    for segment in segments:
+    for source, segment in clips:
         command += [
             "-ss",
             _s(segment.start_ms),
@@ -237,3 +261,179 @@ def default_target(source: Path) -> Path:
     """Beside the video, named after it."""
 
     return source.with_name(f"{source.stem} - loops.mp4")
+
+
+# several videos' loops made one video: each made the same size, its shape
+# kept within it on black, at one frame rate, and its sound at one rate and
+# in stereo, silence for one without, for them to be joined
+AUDIO_RATE = 48000
+DEFAULT_FPS = 30
+MAX_FPS = 60
+
+
+class OutputSize(Enum):
+    """How big a video of several is made: as the biggest of them, or as
+    a 1080p or 720p frame."""
+
+    LARGEST = "largest"
+    P1080 = "1080p"
+    P720 = "720p"
+
+
+_FRAMES = {OutputSize.P1080: (1920, 1080), OutputSize.P720: (1280, 720)}
+
+
+@dataclass(frozen=True)
+class SourceInfo:
+    """What ffmpeg says of a file: its picture's size and frame rate, None
+    where it does not say, and whether it has sound."""
+
+    has_audio: bool
+    size: tuple[int, int] | None = None
+    fps: float | None = None
+
+
+@dataclass(frozen=True)
+class SourceLoops:
+    source: Path
+    segments: list[Segment]
+    info: SourceInfo
+
+
+def info_in(probe_output: str) -> SourceInfo:
+    import re
+
+    size = fps = None
+
+    for line in probe_output.splitlines():
+        if "Stream #" not in line or ": Video:" not in line:
+            continue
+
+        found = re.search(r"\b(\d{2,5})x(\d{2,5})\b", line)
+        if found and size is None:
+            size = (int(found.group(1)), int(found.group(2)))
+
+        found = re.search(r"([\d.]+) fps", line)
+        if found and fps is None:
+            fps = float(found.group(1))
+
+    return SourceInfo(has_audio=has_audio_in(probe_output), size=size, fps=fps)
+
+
+def frame_of(videos: list[SourceLoops], size: OutputSize) -> tuple[int, int]:
+    """The frame the clips are put in: even, for the encoder."""
+
+    if size in _FRAMES:
+        return _FRAMES[size]
+
+    sizes = [video.info.size for video in videos if video.info.size]
+    if not sizes:
+        return _FRAMES[OutputSize.P1080]
+
+    width, height = max(sizes, key=lambda wh: wh[0] * wh[1])
+
+    return width - width % 2, height - height % 2
+
+
+def fps_of(videos: list[SourceLoops]) -> float:
+    rates = [video.info.fps for video in videos if video.info.fps]
+
+    return min(max(rates), MAX_FPS) if rates else DEFAULT_FPS
+
+
+def combined_clips(videos: list[SourceLoops]) -> list[tuple[Path, Segment, bool]]:
+    """Each clip to join, one after another: the videos in turn, the loops
+    of each in their order."""
+
+    return [
+        (video.source, segment, video.info.has_audio)
+        for video in videos
+        for segment in video.segments
+    ]
+
+
+def combined_graph(
+    videos: list[SourceLoops], fade_s: float, size: OutputSize
+) -> tuple[str, bool]:
+    """The filter graph joining every video's loops, and whether it has
+    sound: any of them with sound, every clip has, silence where its video
+    has none, for each to fade into the next."""
+
+    clips = combined_clips(videos)
+    segments = [segment for _, segment, _ in clips]
+    fade = fade_for(segments, fade_s)
+    width, height = frame_of(videos, size)
+    fps = fps_of(videos)
+    has_audio = any(has for _, _, has in clips)
+
+    parts = []
+
+    for i, (_source, segment, clip_has_audio) in enumerate(clips):
+        parts.append(
+            f"[{i}:v:0]scale={width}:{height}:force_original_aspect_ratio=decrease,"
+            f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,"
+            f"fps={fps:g},format=yuv420p,setpts=PTS-STARTPTS[v{i}]"
+        )
+
+        if not has_audio:
+            continue
+
+        if clip_has_audio:
+            parts.append(
+                f"[{i}:a:0]aformat=sample_fmts=fltp:sample_rates={AUDIO_RATE}"
+                f":channel_layouts=stereo,asetpts=PTS-STARTPTS[a{i}]"
+            )
+        else:
+            parts.append(
+                f"anullsrc=channel_layout=stereo:sample_rate={AUDIO_RATE},"
+                f"atrim=duration={segment.seconds:.3f},"
+                f"aformat=sample_fmts=fltp,asetpts=PTS-STARTPTS[a{i}]"
+            )
+
+    return ";".join(parts + _joined(segments, fade, has_audio)), has_audio
+
+
+def combined_command(
+    ffmpeg: Path,
+    videos: list[SourceLoops],
+    target: Path,
+    fade_s: float,
+    size: OutputSize = OutputSize.LARGEST,
+    quality: ExportQuality = ExportQuality.HIGH,
+) -> list[str]:
+    """Every video's loops made one video, each fading into the next."""
+
+    graph, has_audio = combined_graph(videos, fade_s, size)
+    clips = [(source, segment) for source, segment, _ in combined_clips(videos)]
+
+    return _command(ffmpeg, clips, graph, target, has_audio, quality)
+
+
+def combined_seconds(videos: list[SourceLoops], fade_s: float) -> float:
+    segments = [segment for _, segment, _ in combined_clips(videos)]
+
+    return output_seconds(segments, fade_s)
+
+
+def target_for_each(sources: list[Path], folder: Path | None) -> list[Path]:
+    """Where each video's loops go: beside it, or in the folder given; a
+    second of one name, as the same file in two cells, numbered."""
+
+    taken: set[Path] = set()
+    targets = []
+
+    for source in sources:
+        target = default_target(source)
+        if folder is not None:
+            target = folder / target.name
+
+        number = 2
+        stem = target.stem
+        while target in taken:
+            target = target.with_name(f"{stem} ({number}).mp4")
+            number += 1
+
+        taken.add(target)
+        targets.append(target)
+
+    return targets

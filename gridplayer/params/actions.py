@@ -414,6 +414,13 @@ ACTIONS = MappingProxyType(
             "func": "export_loops",
             "show_if": "is_active_loops_exportable",
         },
+        "Export Loops [ALL]": {
+            "title": translate("Actions", "Export Loops of All Videos..."),
+            "icon": "video",
+            # those picked out, if any are, else all
+            "func": "export_all_loops",
+            "show_if": "is_any_loops_exportable",
+        },
         "Set Loop Start": {
             "title": translate("Actions", "Set Loop Start"),
             "key": ",",
