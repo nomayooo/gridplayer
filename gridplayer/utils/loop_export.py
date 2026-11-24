@@ -54,13 +54,23 @@ class Segment:
         return (self.end_ms - self.start_ms) / 1000
 
 
-def segments_of(loops, order: LoopOrder) -> list[Segment]:
-    """The loops to export, finished ones only (a loop begun has no end),
-    in the order asked."""
+def loop_count(loops) -> int:
+    """How many there are to export, before the file's length is known: a
+    loop to the end of the file (no end) counts."""
 
-    segments = [
-        Segment(start, end) for start, end in loops if end is not None and end > start
-    ]
+    return sum(1 for start, end in loops if end is None or end > start)
+
+
+def segments_of(loops, order: LoopOrder, length_ms: int | None = None) -> list[Segment]:
+    """The loops to export, in the order asked: one with no end runs to the
+    end of the file, given its length; without it, it is left out."""
+
+    segments = []
+    for start, end in loops:
+        if end is None:
+            end = length_ms
+        if end is not None and end > start:
+            segments.append(Segment(start, end))
 
     if order == LoopOrder.TIMELINE:
         segments.sort(key=lambda s: (s.start_ms, s.end_ms))
@@ -291,6 +301,7 @@ class SourceInfo:
     has_audio: bool
     size: tuple[int, int] | None = None
     fps: float | None = None
+    length_ms: int | None = None
 
 
 @dataclass(frozen=True)
@@ -303,9 +314,16 @@ class SourceLoops:
 def info_in(probe_output: str) -> SourceInfo:
     import re
 
-    size = fps = None
+    size = fps = length_ms = None
 
     for line in probe_output.splitlines():
+        found = re.search(r"Duration: (\d+):(\d{2}):(\d{2}(?:\.\d+)?)", line)
+        if found and length_ms is None:
+            hours, minutes, seconds = found.groups()
+            length_ms = round(
+                (int(hours) * 3600 + int(minutes) * 60 + float(seconds)) * 1000
+            )
+
         if "Stream #" not in line or ": Video:" not in line:
             continue
 
@@ -317,7 +335,12 @@ def info_in(probe_output: str) -> SourceInfo:
         if found and fps is None:
             fps = float(found.group(1))
 
-    return SourceInfo(has_audio=has_audio_in(probe_output), size=size, fps=fps)
+    return SourceInfo(
+        has_audio=has_audio_in(probe_output),
+        size=size,
+        fps=fps,
+        length_ms=length_ms,
+    )
 
 
 def frame_of(videos: list[SourceLoops], size: OutputSize) -> tuple[int, int]:

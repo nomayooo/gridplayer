@@ -82,12 +82,15 @@ class LoopControl(VideoBlockPart):
 
     @only_seekable
     def set_end_time(self, new_time: int):
-        """Finish the loop begun last here; nothing without one, or here
-        being no later than it starts. Without another begun, it plays."""
+        """Finish the loop begun last here, or without one begun, one from
+        the start of the video; nothing here being no later than it starts.
+        Without another begun, it plays."""
 
         start = self._params.loop_start
+        if start is None:
+            start = 0
 
-        if start is None or new_time is None or new_time <= start:
+        if new_time is None or new_time <= start:
             return
 
         self._add((start, new_time))
