@@ -1,4 +1,5 @@
-"""Export Loops: the active video's A-B loops made one video of their own,
+"""Export Loops: the active video's A-B loops made one video of their own
+(or those of the videos picked out, as for all of them),
 each fading into the next, by ffmpeg (see utils.loop_export), with how far
 along it is shown and a way to stop it. And Export Loops of All Videos: the
 loops of every video in the grid, or of those picked out, each video's into
@@ -30,6 +31,7 @@ from gridplayer.utils.loop_export import (
     default_target,
     export_command,
     info_in,
+    loop_count,
     output_seconds,
     probe_command,
     progress_of,
@@ -132,7 +134,7 @@ class LoopExportManager(ManagerBase):
         }
 
     def is_active_loops_exportable(self) -> bool:
-        return _loops_of(self._ctx.active_block) is not None
+        return bool(self._picked_or_active()[0])
 
     def is_any_loops_exportable(self) -> bool:
         return bool(self._exportable_blocks()[0])
@@ -147,13 +149,19 @@ class LoopExportManager(ManagerBase):
         if self.is_busy:
             return
 
-        block = self._ctx.active_block
-        loops = _loops_of(block)
+        videos, left_out = self._picked_or_active()
 
-        if loops is None:
+        if not videos:
             return
 
-        source = Path(block.video_params.uri)
+        # those picked out, as for all of them
+        if len(videos) > 1 or left_out:
+            self._with_ffmpeg(
+                lambda ffmpeg: self._ask_and_export_all(ffmpeg, videos, left_out)
+            )
+            return
+
+        source, loops = videos[0]
 
         self._with_ffmpeg(lambda ffmpeg: self._ask_and_export(ffmpeg, source, loops))
 
@@ -180,13 +188,19 @@ class LoopExportManager(ManagerBase):
             or self._ctx.video_blocks.blocks_for_ids(self._ctx.commands.layout_order())
         )
 
-        videos = []
-        for block in blocks:
-            loops = _loops_of(block)
-            if loops is not None:
-                videos.append((Path(block.video_params.uri), loops))
+        return _with_loops(blocks)
 
-        return videos, len(blocks) - len(videos)
+    def _picked_or_active(self) -> tuple[list[tuple[Path, list]], int]:
+        """As _exportable_blocks, of those picked out, or else of the active
+        one."""
+
+        blocks = self._ctx.commands.selected_cells()
+
+        if not blocks:
+            active = self._ctx.active_block
+            blocks = [active] if active is not None else []
+
+        return _with_loops(blocks)
 
     def _with_ffmpeg(self, then: Callable[[Path], None]):
         """then(ffmpeg) once there is one: found, or fetched once asked."""
@@ -281,7 +295,7 @@ class LoopExportManager(ManagerBase):
         options = ExportLoopsDialog.ask(
             self.parent(),
             target=default_target(source),
-            loop_count=len(segments_of(loops, _order())),
+            loop_count=loop_count(loops),
             fade_s=settings.get("export/loop_fade_s"),
             order=settings.get("export/loop_order"),
             quality=settings.get("export/loop_quality"),
@@ -299,7 +313,9 @@ class LoopExportManager(ManagerBase):
         if info is None:
             return
 
-        segments = segments_of(loops, options.order)
+        segments = segments_of(loops, options.order, info.length_ms)
+        if not segments:
+            return self._none_left()
 
         self._run(
             [
@@ -329,7 +345,7 @@ class LoopExportManager(ManagerBase):
             self.parent(),
             target=sources[0].parent / COMBINED_NAME,
             video_count=len(videos),
-            loop_count=sum(len(segments_of(loops, _order())) for _, loops in videos),
+            loop_count=sum(loop_count(loops) for _, loops in videos),
             left_out=left_out,
             mode=settings.get("export/all_mode"),
             size=settings.get("export/all_size"),
@@ -365,9 +381,17 @@ class LoopExportManager(ManagerBase):
             infos[source] = info
 
         loops_of = [
-            SourceLoops(source, segments_of(loops, options.order), infos[source])
+            SourceLoops(
+                source,
+                segments_of(loops, options.order, infos[source].length_ms),
+                infos[source],
+            )
             for source, loops in videos
         ]
+
+        # a loop to the end of a file ffmpeg gave no length of
+        if not all(video.segments for video in loops_of):
+            return self._none_left()
 
         if options.mode == AllMode.ONE:
             jobs = [
@@ -403,6 +427,9 @@ class LoopExportManager(ManagerBase):
             ]
 
         self._run(jobs)
+
+    def _none_left(self):
+        self.error.emit(translate("Export Loops", "Couldn't tell where a video ends."))
 
     def _over_a_video(self):
         self.error.emit(
@@ -601,20 +628,31 @@ class LoopExportManager(ManagerBase):
             self._fetcher.wait(3000)
 
 
-def _order():
-    return Settings().get("export/loop_order")
+def _with_loops(blocks) -> tuple[list[tuple[Path, list]], int]:
+    videos = []
+    for block in blocks:
+        loops = _loops_of(block)
+        if loops is not None:
+            videos.append((Path(block.video_params.uri), loops))
+
+    return videos, len(blocks) - len(videos)
 
 
 def _loops_of(block) -> list | None:
-    """A cell's loops to export: None for one with no finished loop, or not
-    a file."""
+    """A cell's loops to export, the one begun and not finished as well, to
+    the end of the file: None for one with none, or not a file."""
 
     if block is None or not block.is_local_file or block.video_params is None:
         return None
 
-    loops = list(block.video_params.loops)
+    params = block.video_params
+    loops = list(params.loops)
 
-    return loops if segments_of(loops, _order()) else None
+    begun = params.loop_start
+    if begun is not None:
+        loops.append((begun, None))
+
+    return loops if loop_count(loops) else None
 
 
 def _remember_common(options):

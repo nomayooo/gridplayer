@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 
+- Set Loop End with no start set makes a loop from the start of the video to there, instead of doing nothing ([#56](https://github.com/nomayooo/gridplayer/pull/56))
 - A video is dragged only once the mouse has moved 20 pixels with its button held, so a click to pause that wobbles is still a click; the distance is set in Settings ([#53](https://github.com/nomayooo/gridplayer/pull/53))
 - Stop muting new videos by default, and set their volume in Settings as 0-100% instead of 0.00-1.00 ([#14](https://github.com/nomayooo/gridplayer/pull/14))
 - Let more of the picture through the title box over a video, and draw a 1px border round the active video instead of 5px ([#7](https://github.com/nomayooo/gridplayer/pull/7))
@@ -33,7 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
-- Export Loops: a video's A-B loops made into one video, each fading into the next, in the order they come or were made, with ffmpeg, which on Windows is downloaded once when first needed; and those of all the videos, or the ones selected, each into a file of its own or all into one ([#52](https://github.com/nomayooo/gridplayer/pull/52)), ([#55](https://github.com/nomayooo/gridplayer/pull/55))
+- Export Loops: a video's A-B loops made into one video, each fading into the next, in the order they come or were made, with ffmpeg, which on Windows is downloaded once when first needed; and those of all the videos, or the ones selected, each into a file of its own or all into one; Export Loops on a video, also in the video's menu itself, takes the videos selected, if any are, and a loop with only its start set runs to the end of the video ([#52](https://github.com/nomayooo/gridplayer/pull/52)), ([#55](https://github.com/nomayooo/gridplayer/pull/55)), ([#56](https://github.com/nomayooo/gridplayer/pull/56))
 - Duplicate a video with Alt+D or its menu: a copy put right after it in the grid, where it was in the video, with its loops; the selected videos each next to its own ([#50](https://github.com/nomayooo/gridplayer/pull/50))
 - Open Playlist opens where a playlist was last opened from, in every window and after a restart ([#37](https://github.com/nomayooo/gridplayer/pull/37))
 - Save Session to favourites: the videos of every GridPlayer window open, as they are, into a folder named by the date and time, each window's in a numbered folder of its own ([#28](https://github.com/nomayooo/gridplayer/pull/28))

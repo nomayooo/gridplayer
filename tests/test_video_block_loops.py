@@ -49,12 +49,18 @@ class TestMakingThem:
         assert block.video_params.loop_start is None
         assert (block.loop_start, block.loop_end) == (5000, 8000)
 
-    def test_set_loop_end_with_none_begun_does_nothing(self, block):
+    def test_set_loop_end_with_none_begun_loops_from_the_start(self, block):
         block.seek(8000)
         block.loop.set_end()
 
+        assert block.video_params.loops == [(0, 8000)]
+        assert block.video_params.current_loop == (0, 8000)
+
+    def test_set_loop_end_at_the_start_with_none_begun_does_nothing(self, block):
+        block.seek(0)
+        block.loop.set_end()
+
         assert block.video_params.loops == []
-        assert block.video_params.current_loop is None
 
     def test_an_end_no_later_than_the_start_is_refused(self, block):
         block.seek(8000)

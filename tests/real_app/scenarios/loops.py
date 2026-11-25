@@ -28,9 +28,13 @@ def scenario(d):
     d.check("two loops made", len(a.video_params.loops) == 2, a.video_params.loops)
     d.note("two loops", a)
 
-    # Set Loop End with none begun does nothing
+    # Set Loop End with none begun loops from the start of the video; taken
+    # back, the two are left
     d.act(a, "Set Loop End")
-    d.check("end alone does nothing", len(a.video_params.loops) == 2)
+    made = a.video_params.loops
+    d.check("end alone loops from the start", len(made) == 3 and made[-1][0] == 0, made)
+    d.act(a, "Remove Last Loop")
+    d.check("taken back", len(a.video_params.loops) == 2, a.video_params.loops)
 
     # the second ends, the first plays; it ends, the second plays
     d.wait_until(

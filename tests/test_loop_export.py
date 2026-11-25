@@ -43,6 +43,7 @@ from gridplayer.utils.loop_export import (
     frame_of,
     has_audio_in,
     info_in,
+    loop_count,
     output_seconds,
     progress_of,
     segments_of,
@@ -57,7 +58,7 @@ needs_ffmpeg = pytest.mark.skipif(FFMPEG is None, reason="no ffmpeg here")
 
 
 class TestTheLoops:
-    def test_finished_ones_only_as_they_come_in_the_video(self):
+    def test_without_the_files_length_finished_ones_only(self):
         assert segments_of(LOOPS, LoopOrder.TIMELINE) == [
             Segment(2000, 5000),
             Segment(9000, 12000),
@@ -73,6 +74,21 @@ class TestTheLoops:
 
     def test_one_with_no_length_left_out(self):
         assert segments_of([(5000, 5000)], LoopOrder.TIMELINE) == []
+
+    def test_one_with_no_end_to_the_end_of_the_file(self):
+        assert segments_of(LOOPS, LoopOrder.MADE, length_ms=20000) == [
+            Segment(9000, 12000),
+            Segment(2000, 5000),
+            Segment(14000, 20000),
+            Segment(14000, 17500),
+        ]
+
+    def test_one_begun_past_the_end_of_the_file_left_out(self):
+        assert segments_of([(21000, None)], LoopOrder.MADE, length_ms=20000) == []
+
+    def test_counted_before_the_length_is_known(self):
+        assert loop_count(LOOPS) == 4
+        assert loop_count([(5000, 5000)]) == 0
 
 
 class TestTheFade:
@@ -479,16 +495,21 @@ def stored(monkeypatch):
     return stored
 
 
-def _block(uri, loops):
+def _block(uri, loops, begun=None):
     return SimpleNamespace(
         is_local_file=isinstance(uri, Path),
-        video_params=SimpleNamespace(uri=uri, loops=list(loops)),
+        video_params=SimpleNamespace(uri=uri, loops=list(loops), loop_start=begun),
     )
 
 
 def _manager(block, monkeypatch, tmp_path):
     monkeypatch.setattr(manager_module, "get_app_data_dir", lambda: tmp_path / "data")
-    manager = LoopExportManager(context=SimpleNamespace(active_block=block))
+    manager = LoopExportManager(
+        context=SimpleNamespace(
+            active_block=block,
+            commands=SimpleNamespace(selected_cells=list),
+        )
+    )
     manager.errors = []
     manager.error.connect(manager.errors.append)
     return manager
@@ -509,10 +530,23 @@ class TestWhatIsOffered:
 
         assert manager.is_active_loops_exportable()
 
-    def test_not_one_with_a_loop_begun_alone(self, stored, monkeypatch, tmp_path):
+    def test_one_with_a_loop_to_the_end(self, stored, monkeypatch, tmp_path):
         manager = _manager(
             _block(tmp_path / "f.mp4", [(1, None)]), monkeypatch, tmp_path
         )
+
+        assert manager.is_active_loops_exportable()
+
+    def test_one_with_a_loop_begun_alone(self, stored, monkeypatch, tmp_path):
+        manager = _manager(
+            _block(tmp_path / "f.mp4", [], begun=1), monkeypatch, tmp_path
+        )
+
+        assert manager.is_active_loops_exportable()
+        assert manager._picked_or_active()[0][0][1] == [(1, None)]
+
+    def test_not_one_with_none(self, stored, monkeypatch, tmp_path):
+        manager = _manager(_block(tmp_path / "f.mp4", []), monkeypatch, tmp_path)
 
         assert not manager.is_active_loops_exportable()
 
@@ -654,6 +688,11 @@ PROBE_PHONE_SILENT = "  Stream #0:0: Video: h264, yuv420p, 1080x1920, 30 fps, 30
 class TestWhatIsInEach:
     def test_size_rate_and_sound(self):
         assert info_in(PROBE_WIDE) == SourceInfo(True, (1920, 1080), 29.97)
+
+    def test_its_length(self):
+        said = "  Duration: 01:02:03.45, start: 0.000000, bitrate: 4006 kb/s\n"
+
+        assert info_in(said + PROBE_WIDE).length_ms == 3_723_450
 
     def test_without_sound(self):
         assert info_in(PROBE_PHONE_SILENT) == SourceInfo(False, (1080, 1920), 30.0)
@@ -875,15 +914,16 @@ class TestWhichVideos:
     ):
         blocks = _cells(
             _block(tmp_path / "a.mp4", [(1, 2)]),
-            _block(tmp_path / "b.mp4", [(1, None)]),
+            _block(tmp_path / "b.mp4", []),
             _block("https://x/live", [(1, 2)]),
             _block(tmp_path / "c.mp4", [(3, 4)]),
+            _block(tmp_path / "d.mp4", [], begun=5),
         )
         manager = _all_manager(blocks, monkeypatch, tmp_path)
 
         videos, left_out = manager._exportable_blocks()
 
-        assert [source.name for source, _ in videos] == ["a.mp4", "c.mp4"]
+        assert [source.name for source, _ in videos] == ["a.mp4", "c.mp4", "d.mp4"]
         assert left_out == 2
         assert manager.is_any_loops_exportable()
 
@@ -899,10 +939,70 @@ class TestWhichVideos:
         assert left_out == 0
 
     def test_none_none_offered(self, stored, monkeypatch, tmp_path):
-        blocks = _cells(_block(tmp_path / "a.mp4", [(1, None)]))
+        blocks = _cells(_block(tmp_path / "a.mp4", [(1, 1)]))
         manager = _all_manager(blocks, monkeypatch, tmp_path)
 
         assert not manager.is_any_loops_exportable()
+
+
+class TestExportLoopsOfOneWithSomePicked:
+    """Export Loops on a video, others picked out: those picked out, as for
+    all of them."""
+
+    @pytest.fixture
+    def asked(self, monkeypatch):
+        monkeypatch.setattr(manager_module.ffmpeg_tool, "find_ffmpeg", lambda _d: "ff")
+        one = Mock(return_value=None)
+        several = Mock(return_value=None)
+        monkeypatch.setattr(manager_module.ExportLoopsDialog, "ask", one)
+        monkeypatch.setattr(manager_module.ExportAllLoopsDialog, "ask", several)
+        return SimpleNamespace(one=one, several=several)
+
+    def _blocks(self, tmp_path):
+        return _cells(
+            _block(tmp_path / "a.mp4", [(1, 2)]),
+            _block(tmp_path / "b.mp4", [(1, 2)]),
+            _block(tmp_path / "c.mp4", [(1, 2)]),
+        )
+
+    def test_those_picked_out(self, stored, monkeypatch, tmp_path, asked):
+        blocks = self._blocks(tmp_path)
+        manager = _all_manager(blocks, monkeypatch, tmp_path, selected=blocks[1:])
+        manager._ctx.active_block = blocks[0]
+
+        manager.cmd_export_loops()
+
+        assert asked.one.call_count == 0
+        assert asked.several.call_args.kwargs["video_count"] == 2
+
+    def test_and_those_left_out_said(self, stored, monkeypatch, tmp_path, asked):
+        blocks = self._blocks(tmp_path)
+        blocks[2].video_params.loops = []
+        manager = _all_manager(blocks, monkeypatch, tmp_path, selected=blocks[1:])
+
+        manager.cmd_export_loops()
+
+        assert asked.several.call_args.kwargs["video_count"] == 1
+        assert asked.several.call_args.kwargs["left_out"] == 1
+
+    def test_only_the_one_with_none_picked(self, stored, monkeypatch, tmp_path, asked):
+        blocks = self._blocks(tmp_path)
+        manager = _all_manager(blocks, monkeypatch, tmp_path)
+        manager._ctx.active_block = blocks[2]
+
+        manager.cmd_export_loops()
+
+        assert asked.several.call_count == 0
+        assert asked.one.call_args.kwargs["target"].name == "c - loops.mp4"
+
+    def test_one_picked_alone_as_one(self, stored, monkeypatch, tmp_path, asked):
+        blocks = self._blocks(tmp_path)
+        manager = _all_manager(blocks, monkeypatch, tmp_path, selected=blocks[:1])
+        manager._ctx.active_block = blocks[2]
+
+        manager.cmd_export_loops()
+
+        assert asked.one.call_args.kwargs["target"].name == "a - loops.mp4"
 
 
 @needs_ffmpeg
@@ -964,6 +1064,23 @@ class TestExportingThemAll:
             str(out / "square - loops.mp4"),
         ]
         assert stored.get("export/all_mode") == AllMode.EACH
+
+    def test_only_a_start_or_an_end_set(
+        self, stored, monkeypatch, tmp_path, films, told
+    ):
+        wide, square = films
+        # 20 s each: from 17 s to the end, from the start to 2 s
+        blocks = _cells(_block(wide, [], begun=17000), _block(square, [(0, 2000)]))
+        out = tmp_path / "out"
+        self._answer(monkeypatch, folder=out)
+        manager = _all_manager(blocks, monkeypatch, tmp_path)
+
+        manager.cmd_export_all_loops()
+        _wait_until(lambda: not manager.is_busy)
+
+        assert manager.errors == []
+        assert _probe(out / "wide - loops.mp4")[0] == pytest.approx(3.0, abs=0.15)
+        assert _probe(out / "square - loops.mp4")[0] == pytest.approx(2.0, abs=0.1)
 
     def test_one_of_them_all(self, stored, monkeypatch, tmp_path, films, told):
         wide, square = films
