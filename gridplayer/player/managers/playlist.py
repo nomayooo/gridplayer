@@ -77,6 +77,9 @@ class PlaylistManager(ManagerBase):
 
         self._saved_playlist_path: Path | None = None
         self._saved_playlist_state: tuple | None = None
+        # what the window was opened from, named in its title while no
+        # playlist file is: a favourites folder
+        self._window_name: str | None = None
         # cells moved into a new window: closed without asking, and not the
         # playlist to open next time, until it is saved or another opened
         self._is_scratch = False
@@ -113,7 +116,15 @@ class PlaylistManager(ManagerBase):
             "playlist_settings": self.cmd_playlist_settings,
             "remember_last_playlist": self.remember_last_playlist,
             "set_playlist_scratch": self.set_playlist_scratch,
+            "set_window_name": self.set_window_name,
         }
+
+    def set_window_name(self, name: str | None) -> None:
+        """The window named after what it was opened from, in its title, as
+        a playlist is after its file."""
+
+        self._window_name = name or None
+        self.update_window_title()
 
     def set_playlist_scratch(self) -> None:
         self._is_scratch = True
@@ -287,6 +298,7 @@ class PlaylistManager(ManagerBase):
         """
         self.playlist_closed.emit()
         self._reset_playlist_session()
+        self._window_name = None
         self._set_saved_playlist(None)
 
     def cmd_save_playlist(self) -> bool:
@@ -301,11 +313,16 @@ class PlaylistManager(ManagerBase):
         return self._save_playlist_via_dialog(self._make_playlist())
 
     def update_window_title(self) -> None:
+        """The playlist's name in the window's title, marked while changed
+        since saved; else the name of what it was opened from, if any. The
+        system adds the player's own name to it."""
+
         window = self.parent()
 
         if self._saved_playlist_path is None:
             if window.windowFilePath():
                 window.setWindowFilePath("")
+            _set_title(window, self._window_name or "")
             window.setWindowModified(False)
             return
 
@@ -313,6 +330,9 @@ class PlaylistManager(ManagerBase):
         if window.windowFilePath() != file_path:
             window.setWindowFilePath(file_path)
 
+        # the name alone, without the file's extension; [*] where a change
+        # since it was saved is marked
+        _set_title(window, f"{self._saved_playlist_path.stem}[*]")
         window.setWindowModified(self._is_playlist_changed())
 
     def process_arguments(self, argv):
@@ -769,3 +789,9 @@ def _last_playlist_dir() -> str:
     folder = Settings().get("player/last_playlist_dir")
 
     return folder if folder and Path(folder).is_dir() else ""
+
+
+def _set_title(window, title: str) -> None:
+    # set only when it changes: it is refreshed every few seconds
+    if window.windowTitle() != title:
+        window.setWindowTitle(title)

@@ -265,9 +265,19 @@ def videos_in(items: list[FavouriteItem]) -> list[FavouriteVideo]:
     return [item for item in items if isinstance(item, FavouriteVideo)]
 
 
-def folders_within(items: list[FavouriteItem]) -> list[list[FavouriteVideo]]:
+class FolderVideos(list):
+    """A folder's own videos, a list as any other, with the folder's name,
+    for the window they open in to go by."""
+
+    def __init__(self, videos=(), name: str | None = None):
+        super().__init__(videos)
+        self.name = name
+
+
+def folders_within(items: list[FavouriteItem]) -> list[FolderVideos]:
     """The videos of each folder a folder holds, at any depth, in the order
-    shown, each folder's own apart: those with none left out."""
+    shown, each folder's own apart, named after it: those with none left
+    out."""
 
     found = []
 
@@ -277,7 +287,7 @@ def folders_within(items: list[FavouriteItem]) -> list[list[FavouriteVideo]]:
 
         own = videos_in(item.items)
         if own:
-            found.append(own)
+            found.append(FolderVideos(own, item.name))
 
         found.extend(folders_within(item.items))
 

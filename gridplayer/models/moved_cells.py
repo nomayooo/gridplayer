@@ -1,6 +1,7 @@
 """Cells moved from one player into a new window, as handed over between the
 two: each as a cell dragged to another player says itself, with the list it
-plays from, if it plays from one."""
+plays from, if it plays from one; and the name the new window goes by, if
+it has one (see PlaylistManager.set_window_name)."""
 
 from pydantic import BaseModel, Field
 
@@ -15,3 +16,4 @@ class MovedCell(BaseModel):
 
 class MovedCells(BaseModel):
     cells: list[MovedCell] = Field(default_factory=list)
+    title: str | None = None
