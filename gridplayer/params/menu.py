@@ -401,6 +401,7 @@ SECTIONS = MappingProxyType(
             "Clear Selection",
             "Move to New Window",
             "Duplicate",
+            "Export Loops",
             "---",
             "Delete File",
             "Close",
