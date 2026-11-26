@@ -1,6 +1,7 @@
 """The window's title: a favourites folder opened into an empty window
 names it; a window opened from one takes the folder's name; a playlist,
-once saved, names it by its file's name, without its extension."""
+once saved, names it by its file's name, without its extension; its
+videos all saved into a folder name it after the folder."""
 
 
 def _title(d):
@@ -67,4 +68,17 @@ def scenario(d):
     d.wait_for_cell("b.mp4")
     d.check(
         "a new window named after its folder", _title(d).startswith("Live"), _title(d)
+    )
+
+    # all of them saved into a folder: named after it
+    from unittest.mock import Mock
+
+    from gridplayer.player.managers import favourites as favourites_module
+
+    favourites_module.AddAllFavouritesDialog.ask = Mock(
+        return_value=(favourites.favourites, (0,))
+    )
+    favourites.cmd_add_all_to_favourites()
+    d.check(
+        "saved into a folder, named after it", _title(d).startswith("Music"), _title(d)
     )

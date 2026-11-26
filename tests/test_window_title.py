@@ -19,10 +19,13 @@ from gridplayer.models.favourites import (
 )
 from gridplayer.models.moved_cells import MovedCell, MovedCells
 from gridplayer.models.video import Video, VideoBlockMime
+from gridplayer.player.managers import favourites as favourites_module
 from gridplayer.player.managers.favourites import FavouritesManager
 from gridplayer.player.managers.new_window import NewWindowManager
 from gridplayer.player.managers.playlist import PlaylistManager
 from tests.test_favourites import (
+    _block,
+    _grid_of,
     _tree_item,
     _video,
     undated,  # noqa: F401 (autouse here too)
@@ -263,3 +266,72 @@ class TestANewWindow:
 
 def test_a_folders_videos_still_a_list():
     assert FolderVideos([1, 2], "A") == [1, 2]
+
+
+class TestSavedToAFolder:
+    """All the window's videos saved into a folder name the window after it,
+    as if opened from it."""
+
+    @pytest.fixture
+    def into_music(self, stored, monkeypatch):
+        asked = Mock(return_value=(stored["favourites"], (1,)))
+        monkeypatch.setattr(favourites_module.AddAllFavouritesDialog, "ask", asked)
+
+    def test_add_all(self, into_music):
+        manager = _grid_of(_block(uri=HERE), _block(uri=HERE, title="Two"))
+
+        manager.cmd_add_all_to_favourites()
+
+        manager._ctx.commands.set_window_name.assert_called_once_with("Music")
+
+    def test_a_stream_among_them_left_out_still(self, into_music):
+        manager = _grid_of(_block(uri=HERE), _block(uri="https://example.com/v"))
+
+        manager.cmd_add_all_to_favourites()
+
+        manager._ctx.commands.set_window_name.assert_called_once_with("Music")
+
+    def test_all_of_them_picked_out(self, into_music):
+        blocks = [_block(uri=HERE), _block(uri=HERE, title="Two")]
+        manager = _grid_of(*blocks)
+        manager._ctx.commands.selected_cells = lambda: list(blocks)
+
+        manager.cmd_add_to_favourites()
+
+        manager._ctx.commands.set_window_name.assert_called_once_with("Music")
+
+    def test_some_picked_out_name_nothing(self, into_music):
+        blocks = [_block(uri=HERE), _block(uri=HERE, title="Two")]
+        manager = _grid_of(*blocks)
+        manager._ctx.commands.selected_cells = lambda: blocks[:1]
+
+        manager.cmd_add_to_favourites()
+
+        manager._ctx.commands.set_window_name.assert_not_called()
+
+    def test_the_only_video_on_its_own(self, stored, monkeypatch):
+        monkeypatch.setattr(
+            favourites_module.AddFavouriteDialog,
+            "ask",
+            Mock(return_value=(stored["favourites"], (2,), "Clip")),
+        )
+        block = _block(uri=HERE)
+        manager = _grid_of(block)
+        manager._ctx.active_block = block
+        manager._ctx.commands.selected_cells = list
+
+        manager.cmd_add_to_favourites()
+
+        manager._ctx.commands.set_window_name.assert_called_once_with("Empty")
+
+    def test_the_top_names_nothing(self, stored, monkeypatch):
+        monkeypatch.setattr(
+            favourites_module.AddAllFavouritesDialog,
+            "ask",
+            Mock(return_value=(stored["favourites"], ())),
+        )
+        manager = _grid_of(_block(uri=HERE))
+
+        manager.cmd_add_all_to_favourites()
+
+        manager._ctx.commands.set_window_name.assert_not_called()

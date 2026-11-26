@@ -335,6 +335,7 @@ class FavouritesManager(ManagerBase):
         favourites.put_video(folder, _favourite_of(block, name))
 
         self._save(favourites)
+        self._name_window_if_all(favourites, folder, [block])
 
     def cmd_add_all_to_favourites(self) -> None:
         """Every video open that is a file, in the grid's order, made a
@@ -377,6 +378,24 @@ class FavouritesManager(ManagerBase):
         )
 
         self._save(favourites)
+        self._name_window_if_all(favourites, folder, files)
+
+    def _name_window_if_all(self, favourites, folder, saved: list) -> None:
+        """The window named after the folder its videos were saved in, as
+        if opened from it: when all of them were, the files of it, and the
+        folder is not the top."""
+
+        names = dict(favourites.folders()).get(folder)
+        if not names:
+            return
+
+        in_window = self._ctx.video_blocks.blocks_for_ids(
+            self._ctx.commands.layout_order()
+        )
+        files = {id(block) for block in in_window if block.is_local_file}
+
+        if files and files <= {id(block) for block in saved}:
+            self._ctx.commands.set_window_name(names[-1])
 
     def cmd_import_playlists(self) -> None:
         """Playlists made favourites, each a folder of its videos named after
