@@ -123,7 +123,10 @@ class DragNDropManager(ManagerBase):
             self._drag_start_position = None
             return
 
-        self._drag_start_position = event.pos()
+        # on the screen: the press and each move come through here once for
+        # each widget they go by, in that widget's own coordinates, a cell
+        # away from the window's corner hundreds of pixels from the window's
+        self._drag_start_position = event.globalPos()
 
     def mouseMoveEvent(self, event):
         if is_modal_open():
@@ -172,7 +175,9 @@ class DragNDropManager(ManagerBase):
         if self._drag_start_position is None:
             return False
 
-        drag_distance = (event.pos() - self._drag_start_position).manhattanLength()
+        drag_distance = (
+            event.globalPos() - self._drag_start_position
+        ).manhattanLength()
         if drag_distance < drag_start_distance():
             return False
 

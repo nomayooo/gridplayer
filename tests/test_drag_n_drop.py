@@ -86,9 +86,11 @@ def _make_manager():
 
 
 def _left_press():
+    # where it is in a cell; where it is on the screen
     return QMouseEvent(
         QEvent.MouseButtonPress,
         QPointF(10, 20),
+        QPointF(510, 220),
         Qt.LeftButton,
         Qt.LeftButton,
         Qt.ControlModifier,
@@ -103,7 +105,7 @@ def test_a_left_press_is_the_start_of_moving_the_video(mocker):
 
     manager.mousePressEvent(_left_press())
 
-    assert manager._drag_start_position == QPoint(10, 20)
+    assert manager._drag_start_position == QPoint(510, 220)
 
 
 def test_a_press_that_drags_the_picture_moves_no_video(mocker):
@@ -565,7 +567,7 @@ class TestAWindowOverThePlayer:
     def test_the_player_s_own_still_moves_the_video(self, manager):
         manager.eventFilter(QWidget(self.player), _left_press())
 
-        assert manager._drag_start_position == QPoint(10, 20)
+        assert manager._drag_start_position == QPoint(510, 220)
         assert self.activated == [True]
 
     def test_a_drag_gone_on_to_it_is_off_the_player(self, manager, mocker):
@@ -663,10 +665,12 @@ class TestHowFarBeforeADrag:
         return manager
 
     @staticmethod
-    def _moved_by(dx, dy=0):
+    def _moved_by(dx, dy=0, local=None):
+        on_screen = QPointF(100 + dx, 100 + dy)
         return QMouseEvent(
             QEvent.MouseMove,
-            QPointF(100 + dx, 100 + dy),
+            on_screen if local is None else local,
+            on_screen,
             Qt.NoButton,
             Qt.LeftButton,
             Qt.NoModifier,
@@ -692,6 +696,14 @@ class TestHowFarBeforeADrag:
 
         assert not started_at._is_drag_started(self._moved_by(40, 10))
         assert started_at._is_drag_started(self._moved_by(50, 10))
+
+    def test_measured_on_the_screen_not_in_a_widget(self, started_at, distance):
+        """The press seen in the window's coordinates, a move in those of a
+        cell 500 px along: as far apart on the screen as moved."""
+
+        assert not started_at._is_drag_started(
+            self._moved_by(6, 3, local=QPointF(-394, 103))
+        )
 
     def test_never_less_than_the_systems(self, started_at, distance, mocker):
         distance["player/drag_start_distance"] = 2
