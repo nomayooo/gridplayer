@@ -240,9 +240,9 @@ class NewWindowManager(ManagerBase):
         for block in blocks:
             block.close()
 
-    def cmd_open_in_new_window(self, videos: list) -> bool:
+    def cmd_open_in_new_window(self, videos: list, title: str | None = None) -> bool:
         """Videos opened in a new window of their own, as cells moved there
-        are, this one left as it is."""
+        are, this one left as it is; the window named, if given a name."""
 
         if not videos:
             return False
@@ -251,7 +251,8 @@ class NewWindowManager(ManagerBase):
             cells=[
                 MovedCell(cell=VideoBlockMime(id=str(uuid4()), video=video))
                 for video in videos
-            ]
+            ],
+            title=title,
         )
 
         return self._start_new_window(moved)
@@ -329,6 +330,9 @@ class NewWindowManager(ManagerBase):
 
         # nothing to be asked about on closing it, until it is saved
         self._ctx.commands.set_playlist_scratch()
+
+        if moved.title:
+            self._ctx.commands.set_window_name(moved.title)
 
 
 def _write_moved_cells(moved: MovedCells) -> Path:

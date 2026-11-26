@@ -34,6 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 
+- Name the window after what is open in it: the playlist, without its file's extension, or the favourites folder it was opened from, in this window or one of its own, or all its videos were saved into ([#57](https://github.com/nomayooo/gridplayer/pull/57))
 - Export Loops: a video's A-B loops made into one video, each fading into the next, in the order they come or were made, with ffmpeg, which on Windows is downloaded once when first needed; and those of all the videos, or the ones selected, each into a file of its own or all into one; Export Loops on a video, also in the video's menu itself, takes the videos selected, if any are, and a loop with only its start set runs to the end of the video ([#52](https://github.com/nomayooo/gridplayer/pull/52)), ([#55](https://github.com/nomayooo/gridplayer/pull/55)), ([#56](https://github.com/nomayooo/gridplayer/pull/56))
 - Duplicate a video with Alt+D or its menu: a copy put right after it in the grid, where it was in the video, with its loops; the selected videos each next to its own ([#50](https://github.com/nomayooo/gridplayer/pull/50))
 - Open Playlist opens where a playlist was last opened from, in every window and after a restart ([#37](https://github.com/nomayooo/gridplayer/pull/37))

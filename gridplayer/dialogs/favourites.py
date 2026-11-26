@@ -45,6 +45,7 @@ from gridplayer.models.favourites import (
     Favourites,
     FavouriteVideo,
     FolderPath,
+    FolderVideos,
     added_now,
     folders_within,
     newest,
@@ -673,7 +674,7 @@ class ManageFavouritesDialog(QDialog):
     in it: sorted, there is no place to drop one in."""
 
     # the videos to open here, and the lists of them for new windows
-    open_requested = pyqtSignal(list, list)
+    open_requested = pyqtSignal(object, object)
 
     def __init__(self, favourites: Favourites, **kwargs):
         super().__init__(**kwargs)
@@ -914,7 +915,9 @@ class ManageFavouritesDialog(QDialog):
         picked goes with that folder."""
 
         picked = {id(tree_item) for tree_item in tree_items}
-        here, apart = [], []
+        # named after the folder, the one picked alone, as each in a window
+        # of its own is
+        here, apart = FolderVideos(), []
 
         def is_within_picked(tree_item):
             parent = tree_item.parent()
@@ -935,6 +938,8 @@ class ManageFavouritesDialog(QDialog):
         )
 
         def walk(parent_item):
+            nonlocal is_video_picked
+
             for index in range(parent_item.childCount()):
                 tree_item = parent_item.child(index)
                 is_folder = tree_item.data(0, ITEM_FAVOURITE) is None
@@ -943,18 +948,27 @@ class ManageFavouritesDialog(QDialog):
                     if is_folder:
                         items = self._read(tree_item, is_as_shown=True)
                         own = videos_in(items)
+                        name = tree_item.text(0).strip()
                         if not is_each_apart:
                             here.extend(own)
+                            here.name = name
                         elif own:
-                            apart.append(own)
+                            apart.append(FolderVideos(own, name))
                         apart.extend(folders_within(items))
                     else:
                         here.append(self._read_video(tree_item))
+                        is_video_picked = True
 
                 if is_folder:
                     walk(tree_item)
 
+        is_video_picked = False
+
         walk(self.tree.invisibleRootItem())
+
+        # videos picked with it: not the folder's alone
+        if is_video_picked:
+            here.name = None
 
         return here, apart
 

@@ -240,7 +240,12 @@ def stored(monkeypatch):
 def _manager(active=None, selected=()):
     commands = MagicMock()
     commands.selected_cells = lambda: list(selected)
-    ctx = SimpleNamespace(active_block=active, commands=commands)
+    ctx = SimpleNamespace(
+        active_block=active,
+        commands=commands,
+        # no cells, unless a test gives it some (_grid_of)
+        video_blocks=SimpleNamespace(blocks_for_ids=lambda _ids: []),
+    )
 
     return FavouritesManager(context=ctx)
 

@@ -21,6 +21,7 @@ from gridplayer.models.favourites import (
     FavouriteVideo,
     FolderNames,
     FolderPath,
+    FolderVideos,
     added_now,
     folders_within,
     in_sort,
@@ -217,8 +218,11 @@ class FavouritesManager(ManagerBase):
 
         # in the order the menu shows them
         items = sorted_deep(self._items_at(folder), self._sort)
+        names = dict(self._kept.folders()).get(folder) or [None]
 
-        self.open_favourites(videos_in(items), folders_within(items))
+        self.open_favourites(
+            FolderVideos(videos_in(items), names[-1]), folders_within(items)
+        )
 
     def open_favourites(
         self, here: list, apart: list[list], is_paused: bool = False
@@ -229,13 +233,22 @@ class FavouritesManager(ManagerBase):
 
         With none to open here and none open here yet, the first of those
         for a window of their own opens here instead, the window not left
-        empty for one more."""
+        empty for one more.
 
-        if not here and apart and not self._ctx.commands.is_videos():
+        A folder's own videos (FolderVideos) name the window they open in
+        after the folder: a new one, or this one, if it had none open."""
+
+        is_empty_here = not self._ctx.commands.is_videos()
+
+        if not here and apart and is_empty_here:
             here, apart = apart[0], apart[1:]
 
         if here:
             self._ctx.commands.add_favourite_videos(here, is_paused=is_paused)
+
+            name = getattr(here, "name", None)
+            if is_empty_here and name:
+                self._ctx.commands.set_window_name(name)
 
         missing = []
 
@@ -252,7 +265,9 @@ class FavouritesManager(ManagerBase):
                     videos.append(video)
 
             if videos:
-                self._ctx.commands.open_in_new_window(videos)
+                self._ctx.commands.open_in_new_window(
+                    videos, title=getattr(favourites, "name", None)
+                )
 
         if missing:
             self.error.emit(
@@ -320,6 +335,7 @@ class FavouritesManager(ManagerBase):
         favourites.put_video(folder, _favourite_of(block, name))
 
         self._save(favourites)
+        self._name_window_if_all(favourites, folder, [block])
 
     def cmd_add_all_to_favourites(self) -> None:
         """Every video open that is a file, in the grid's order, made a
@@ -362,6 +378,24 @@ class FavouritesManager(ManagerBase):
         )
 
         self._save(favourites)
+        self._name_window_if_all(favourites, folder, files)
+
+    def _name_window_if_all(self, favourites, folder, saved: list) -> None:
+        """The window named after the folder its videos were saved in, as
+        if opened from it: when all of them were, the files of it, and the
+        folder is not the top."""
+
+        names = dict(favourites.folders()).get(folder)
+        if not names:
+            return
+
+        in_window = self._ctx.video_blocks.blocks_for_ids(
+            self._ctx.commands.layout_order()
+        )
+        files = {id(block) for block in in_window if block.is_local_file}
+
+        if files and files <= {id(block) for block in saved}:
+            self._ctx.commands.set_window_name(names[-1])
 
     def cmd_import_playlists(self) -> None:
         """Playlists made favourites, each a folder of its videos named after
