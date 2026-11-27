@@ -752,6 +752,7 @@ SECTIONS = MappingProxyType(
                 "Favourites List",
             ),
             "Save Session to Favourites",
+            "New Window",
             "Open Playlist",
             "Open Playlist (Recent)",
             "Save Playlist",

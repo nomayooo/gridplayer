@@ -14,6 +14,7 @@ from gridplayer.models.video import (
     default_audio_selection,
     default_subtitle_selection,
 )
+from gridplayer.params import env
 from gridplayer.params.settings_bindings import VIDEO_PARAM_ATTRS
 from gridplayer.params.static import (
     SeekSyncMode,
@@ -142,6 +143,12 @@ class PlaylistManager(ManagerBase):
             return
 
         path = self._saved_playlist_path
+
+        # another window open beside the first (New Window, or files opened
+        # in one) says what opens next only once it has a playlist of its
+        # own: closed empty, it leaves the first one's
+        if env.IS_NEW_WINDOW and path is None:
+            return
 
         if path is None or not Settings().get("player/reopen_last_playlist"):
             Settings().set("last_playlist", "")

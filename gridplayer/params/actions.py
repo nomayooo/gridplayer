@@ -3006,6 +3006,13 @@ ACTIONS = MappingProxyType(
             "menu_generator": "menu_generator_favourites",
             "is_menu_inline": True,
         },
+        "New Window": {
+            "title": translate("Actions", "New Window"),
+            "key": "Ctrl+Shift+N",
+            "icon": "open-in-browser",
+            # an empty one, of its own; this one left as it is
+            "func": "open_new_window",
+        },
         "Open Playlist": {
             "title": translate("Actions", "Open Playlist"),
             "key": "Ctrl+O",
