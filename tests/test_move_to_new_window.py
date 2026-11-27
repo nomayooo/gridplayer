@@ -143,6 +143,26 @@ class TestFilesInANewWindow:
         assert not manager.cmd_open_files_in_new_window([])
         assert started == []
 
+    def test_an_empty_one(self, manager, started):
+        assert manager.cmd_open_new_window()
+
+        ((_, args),) = started
+        assert args[-2:] == [command.NEW_WINDOW_ARG, "--"]
+
+    def test_an_empty_one_said_when_it_could_not_start(self, manager, monkeypatch):
+        monkeypatch.setattr(new_window.QProcess, "startDetached", lambda *_a: False)
+
+        assert not manager.cmd_open_new_window()
+        assert manager.errors == ["Couldn't open a new window!"]
+
+    def test_new_window_in_the_menu_with_its_key(self):
+        from gridplayer.params.actions import ACTIONS
+        from gridplayer.params.menu import SECTIONS
+
+        assert ACTIONS["New Window"]["key"] == "Ctrl+Shift+N"
+        assert ACTIONS["New Window"]["func"] == "open_new_window"
+        assert "New Window" in SECTIONS["program"]
+
     def test_said_when_it_could_not_start(self, manager, monkeypatch):
         monkeypatch.setattr(new_window.QProcess, "startDetached", lambda *_a: False)
 

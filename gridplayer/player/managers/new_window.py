@@ -52,6 +52,7 @@ class NewWindowManager(ManagerBase):
             "move_to_new_window": self.cmd_move_to_new_window,
             "open_in_new_window": self.cmd_open_in_new_window,
             "open_files_in_new_window": self.cmd_open_files_in_new_window,
+            "open_new_window": self.cmd_open_new_window,
             "open_moved_cells": self.open_moved_cells,
             "close_cells": self.cmd_close_cells,
             "duplicate_cells": self.cmd_duplicate_cells,
@@ -265,6 +266,20 @@ class NewWindowManager(ManagerBase):
             return False
 
         program, args = new_window_files_command(files)
+
+        if QProcess.startDetached(program, args):
+            return True
+
+        self._log.error(f"Couldn't start a new window: {program} {args}")
+        self.error.emit(translate("Error", "Couldn't open a new window!"))
+
+        return False
+
+    def cmd_open_new_window(self) -> bool:
+        """An empty window of its own, as the player started again would be
+        were only one allowed to run; this one left as it is."""
+
+        program, args = new_window_files_command([])
 
         if QProcess.startDetached(program, args):
             return True

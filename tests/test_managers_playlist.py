@@ -1754,6 +1754,30 @@ class TestLastPlaylist:
         assert settings["last_playlist"] == ""
         Settings().sync.assert_called_once()
 
+    def test_a_new_window_closed_empty_leaves_it_alone(
+        self, manager, settings, monkeypatch
+    ):
+        from gridplayer.params import env
+
+        monkeypatch.setattr(env, "IS_NEW_WINDOW", True)
+        settings["last_playlist"] = "before.gpls"
+
+        manager.remember_last_playlist()
+
+        assert settings["last_playlist"] == "before.gpls"
+
+    def test_a_new_window_with_a_playlist_of_its_own_remembers_it(
+        self, manager, settings, monkeypatch, tmp_path
+    ):
+        from gridplayer.params import env
+
+        monkeypatch.setattr(env, "IS_NEW_WINDOW", True)
+        manager._saved_playlist_path = tmp_path / "own.gpls"
+
+        manager.remember_last_playlist()
+
+        assert settings["last_playlist"] == str(tmp_path / "own.gpls")
+
     def test_cells_moved_into_a_new_window_leave_it_alone(self, manager, settings):
         settings["last_playlist"] = "before.gpls"
         manager.set_playlist_scratch()

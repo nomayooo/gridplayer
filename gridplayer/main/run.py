@@ -63,7 +63,8 @@ def run_app():
 
     # once the loop runs, and not over a file opened by then, such as one
     # macOS sends as an event rather than an argument
-    if not sys.argv[1:] and env.MOVED_CELLS_FILE is None:
+    # a new window opened from another (New Window) starts empty
+    if not sys.argv[1:] and env.MOVED_CELLS_FILE is None and not env.IS_NEW_WINDOW:
         QTimer.singleShot(0, player.restore_last_playlist)
 
     return app.exec_()
